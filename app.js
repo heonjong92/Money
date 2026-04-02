@@ -27,6 +27,7 @@ let editingTransactionId = null;
 let installPromptEvent = null;
 let toastTimer = null;
 let activeMobileView = "summary";
+let selectedCalendarDate = "";
 let activeCalendarDate = "";
 let calendarClickTimer = null;
 let lastCalendarTapDate = "";
@@ -229,7 +230,7 @@ function handleFilterTypeChange() {
   renderTransactions();
 }
 
-// [Codex] 달력 날짜 칸은 한 번 탭하면 바로 기록으로 가고, 두 번 탭할 때만 상세를 열도록 제스처를 단순화했습니다.
+// [Codex] 달력 날짜 칸은 한 번 탭하면 선택만 하고, 두 번 탭할 때만 상세를 열도록 제스처를 다시 분리했습니다.
 function handleCalendarDayClick(event) {
   const dayButton = event.target.closest(".calendar-day[data-date]");
   if (!dayButton) {
@@ -252,14 +253,25 @@ function handleCalendarDayClick(event) {
   }
 
   if (isDoubleTap) {
-    toggleCalendarDetailSheet(dateKey);
+    openCalendarDetailSheet(dateKey);
     return;
   }
 
   calendarClickTimer = window.setTimeout(() => {
-    openEntryForDate(dateKey);
+    selectCalendarDate(dateKey);
     calendarClickTimer = null;
   }, 180);
+}
+
+// [Codex] 한 번 탭한 날짜는 선택 상태만 바꾸고, 열려 있던 상세 시트가 있으면 닫아서 사용자가 탭 결과를 명확히 이해하게 합니다.
+function selectCalendarDate(dateKey) {
+  selectedCalendarDate = dateKey;
+
+  if (!elements.calendarDetailSheet.hidden) {
+    closeCalendarDetailSheet({ rerender: false });
+  }
+
+  renderSummary();
 }
 
 // [Codex] 홈 달력의 + 버튼은 선택된 날짜가 있으면 그 날짜로, 없으면 현재 월 기준 가장 자연스러운 날짜로 바로 기록 화면을 엽니다.
@@ -271,8 +283,8 @@ function getQuickEntryDateForSummaryMonth() {
   const summaryMonth = getSummaryMonth();
   const today = getLocalDateString(new Date());
 
-  if (activeCalendarDate && activeCalendarDate.startsWith(summaryMonth)) {
-    return activeCalendarDate;
+  if (selectedCalendarDate && selectedCalendarDate.startsWith(summaryMonth)) {
+    return selectedCalendarDate;
   }
 
   if (today.startsWith(summaryMonth)) {
@@ -602,7 +614,7 @@ function renderCalendarView(monthTransactions, monthKey) {
     if (summary.count > 0) {
       dayCell.classList.add("has-entry");
     }
-    if (activeCalendarDate === cellDate) {
+    if (selectedCalendarDate === cellDate) {
       dayCell.classList.add("is-selected");
     }
 
@@ -1183,6 +1195,7 @@ function openEntryForDate(dateKey) {
     calendarClickTimer = null;
   }
 
+  selectedCalendarDate = dateKey;
   lastCalendarTapDate = "";
   lastCalendarTapAt = 0;
   resetEntryForm();
@@ -1192,17 +1205,8 @@ function openEntryForDate(dateKey) {
   getMobileViewPanel("entry")?.scrollTo({ top: 0, behavior: "smooth" });
 }
 
-// [Codex] 상세 시트는 같은 날짜를 다시 열면 닫히도록 토글해 두 번 탭과 길게 누름이 같은 동작으로 읽히게 맞춥니다.
-function toggleCalendarDetailSheet(dateKey) {
-  if (!elements.calendarDetailSheet.hidden && activeCalendarDate === dateKey) {
-    closeCalendarDetailSheet();
-    return;
-  }
-
-  openCalendarDetailSheet(dateKey);
-}
-
 function openCalendarDetailSheet(dateKey) {
+  selectedCalendarDate = dateKey;
   activeCalendarDate = dateKey;
   elements.calendarDetailSheet.hidden = false;
   renderSummary();
@@ -1217,9 +1221,6 @@ function closeCalendarDetailSheet(options = {}) {
 
   elements.calendarDetailSheet.hidden = true;
   activeCalendarDate = "";
-  elements.calendarGrid.querySelectorAll(".calendar-day.is-selected").forEach((dayCell) => {
-    dayCell.classList.remove("is-selected");
-  });
 
   if (rerender) {
     renderSummary();
