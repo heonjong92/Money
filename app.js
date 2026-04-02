@@ -27,6 +27,7 @@ let editingTransactionId = null;
 let installPromptEvent = null;
 let toastTimer = null;
 let activeMobileView = "summary";
+let activeCalendarDate = "";
 
 const elements = {
   mobileViewerNav: document.querySelector("#mobile-viewer-nav"),
@@ -53,6 +54,13 @@ const elements = {
   statCount: document.querySelector("#stat-count"),
   calendarMonthCaption: document.querySelector("#calendar-month-caption"),
   calendarGrid: document.querySelector("#calendar-grid"),
+  calendarDetailSheet: document.querySelector("#calendar-detail-sheet"),
+  calendarDetailBackdrop: document.querySelector("#calendar-detail-backdrop"),
+  calendarDetailClose: document.querySelector("#calendar-detail-close"),
+  calendarDetailDate: document.querySelector("#calendar-detail-date"),
+  calendarDetailMetrics: document.querySelector("#calendar-detail-metrics"),
+  calendarDetailNote: document.querySelector("#calendar-detail-note"),
+  calendarDetailList: document.querySelector("#calendar-detail-list"),
   entryForm: document.querySelector("#entry-form"),
   categoryInput: document.querySelector("#category-input"),
   paymentMethodInput: document.querySelector("#payment-method-input"),
@@ -108,6 +116,9 @@ function bindEvents() {
   elements.monthSheetBackdrop.addEventListener("click", closeMonthSheet);
   elements.monthSheetCancel.addEventListener("click", closeMonthSheet);
   elements.monthSheetApply.addEventListener("click", applySelectedMonthFromSheet);
+  elements.calendarGrid.addEventListener("click", handleCalendarDayClick);
+  elements.calendarDetailBackdrop.addEventListener("click", () => closeCalendarDetailSheet());
+  elements.calendarDetailClose.addEventListener("click", () => closeCalendarDetailSheet());
   elements.summaryMonth.addEventListener("change", handleSummaryMonthChange);
   elements.filterMonth.addEventListener("change", renderTransactions);
   elements.filterScope.addEventListener("change", renderTransactions);
@@ -121,6 +132,7 @@ function bindEvents() {
   elements.resetButton.addEventListener("click", resetAllData);
   elements.installButton.addEventListener("click", handleInstallClick);
   elements.transactionList.addEventListener("click", handleTransactionAction);
+  elements.calendarDetailList.addEventListener("click", handleTransactionAction);
 
   document.querySelectorAll('input[name="type"]').forEach((radio) => {
     radio.addEventListener("change", syncEntryCategoryOptions);
@@ -166,6 +178,7 @@ function handleEntrySubmit(event) {
 
   persistState();
   resetEntryForm();
+  closeCalendarDetailSheet({ rerender: false });
   renderAll();
   setActiveMobileView("summary");
 }
@@ -180,6 +193,26 @@ function handleSummaryMonthChange() {
 function handleFilterTypeChange() {
   syncFilterCategoryOptions();
   renderTransactions();
+}
+
+// [Codex] 홈 달력 날짜 셀을 누르면 같은 화면 안에서 그날 거래를 하단 시트로 바로 열어 이동 흐름을 줄입니다.
+function handleCalendarDayClick(event) {
+  const dayButton = event.target.closest(".calendar-day[data-date]");
+  if (!dayButton) {
+    return;
+  }
+
+  const dateKey = dayButton.dataset.date;
+  if (!dateKey) {
+    return;
+  }
+
+  if (!elements.calendarDetailSheet.hidden && activeCalendarDate === dateKey) {
+    closeCalendarDetailSheet();
+    return;
+  }
+
+  openCalendarDetailSheet(dateKey);
 }
 
 function handleTransactionAction(event) {
@@ -200,6 +233,9 @@ function handleTransactionAction(event) {
   }
 
   if (actionButton.classList.contains("edit-button")) {
+    if (elements.calendarDetailList.contains(actionButton)) {
+      closeCalendarDetailSheet({ rerender: false });
+    }
     startEditingTransaction(transaction);
     return;
   }
@@ -273,6 +309,7 @@ function startEditingTransaction(transaction) {
   elements.formModeLabel.textContent = "거래 수정 중";
   elements.submitButton.textContent = "수정 저장";
   elements.cancelEditButton.hidden = false;
+  closeCalendarDetailSheet({ rerender: false });
   // [Codex] 수정 진입 시 기록 화면으로 바로 이동해 탭 기반 구조에서도 편집 흐름이 자연스럽게 이어지게 합니다.
   setActiveMobileView("entry");
   getMobileViewPanel("entry")?.scrollTo({ top: 0, behavior: "smooth" });
@@ -360,6 +397,15 @@ function renderSummary() {
   elements.analysisMonthLabel.textContent = `${formatMonthLabel(monthKey)} 기준`;
   renderCalendarView(monthTransactions, monthKey);
   renderCategoryBreakdown(monthTransactions);
+
+  // [Codex] 날짜 상세 시트가 열린 상태에서는 월 이동이나 데이터 변경 뒤에도 같은 날짜 내용을 즉시 다시 맞춰줍니다.
+  if (!elements.calendarDetailSheet.hidden && activeCalendarDate) {
+    if (activeCalendarDate.startsWith(monthKey)) {
+      renderCalendarDetailSheet(activeCalendarDate);
+    } else {
+      closeCalendarDetailSheet({ rerender: false });
+    }
+  }
 }
 
 function renderCategoryBreakdown(monthTransactions) {
@@ -410,16 +456,24 @@ function renderCalendarView(monthTransactions, monthKey) {
     const isCurrentMonth = currentDate.getMonth() === month - 1;
     const summary = transactionSummaryMap.get(cellDate) || { income: 0, expense: 0, count: 0 };
 
-    const dayCell = document.createElement("article");
+    const dayCell = document.createElement("button");
+    dayCell.type = "button";
     dayCell.className = "calendar-day";
     if (!isCurrentMonth) {
       dayCell.classList.add("is-outside");
+      dayCell.disabled = true;
+    } else {
+      dayCell.dataset.date = cellDate;
+      dayCell.setAttribute("aria-label", getCalendarDayAriaLabel(cellDate, summary));
     }
     if (cellDate === today) {
       dayCell.classList.add("is-today");
     }
     if (summary.count > 0) {
       dayCell.classList.add("has-entry");
+    }
+    if (activeCalendarDate === cellDate) {
+      dayCell.classList.add("is-selected");
     }
 
     const dayNumber = document.createElement("span");
@@ -449,6 +503,78 @@ function renderCalendarView(monthTransactions, monthKey) {
     dayCell.append(dayNumber, dayMeta);
     elements.calendarGrid.appendChild(dayCell);
   }
+}
+
+// [Codex] 달력 상세 시트는 선택한 날짜의 거래 수와 수입/지출 합계를 먼저 보여주고, 아래에서 같은 카드 목록을 이어서 확인하게 합니다.
+function renderCalendarDetailSheet(dateKey) {
+  const transactions = getTransactionsForDate(dateKey);
+  const income = sumTransactions(transactions, "income");
+  const expense = sumTransactions(transactions, "expense");
+  const balance = income - expense;
+
+  elements.calendarDetailDate.textContent = formatDate(dateKey);
+  elements.calendarDetailMetrics.replaceChildren(
+    createCalendarDetailMetric("기록 수", `${transactions.length}건`),
+    createCalendarDetailMetric("수입", formatCurrency(income), "income"),
+    createCalendarDetailMetric("지출", formatCurrency(expense), "expense")
+  );
+  elements.calendarDetailNote.textContent = transactions.length
+    ? `순잔액 ${formatCurrency(balance)}`
+    : "선택한 날짜에 아직 거래가 없습니다.";
+
+  elements.calendarDetailList.replaceChildren();
+  if (transactions.length === 0) {
+    elements.calendarDetailList.appendChild(createEmptyState("선택한 날짜에 아직 거래가 없습니다."));
+    return;
+  }
+
+  transactions.forEach((transaction) => {
+    elements.calendarDetailList.appendChild(createTransactionItemElement(transaction, { showDate: false }));
+  });
+}
+
+function createCalendarDetailMetric(label, value, toneClass = "") {
+  const card = document.createElement("article");
+  card.className = "metric-chip calendar-detail-metric";
+
+  const labelElement = document.createElement("span");
+  labelElement.textContent = label;
+
+  const valueElement = document.createElement("strong");
+  valueElement.textContent = value;
+  if (toneClass) {
+    valueElement.classList.add(toneClass);
+  }
+
+  card.append(labelElement, valueElement);
+  return card;
+}
+
+function createTransactionItemElement(transaction, options = {}) {
+  const { showDate = true } = options;
+  const fragment = elements.transactionItemTemplate.content.cloneNode(true);
+  const item = fragment.querySelector(".transaction-item");
+  const amountElement = fragment.querySelector(".transaction-amount");
+  const badgeElement = fragment.querySelector(".transaction-badge");
+  const dateElement = fragment.querySelector(".transaction-date");
+  const memoElement = fragment.querySelector(".transaction-memo");
+
+  item.dataset.transactionId = transaction.id;
+  amountElement.textContent = `${transaction.type === "income" ? "+" : "-"} ${formatCurrency(transaction.amount)}`;
+  amountElement.classList.add(transaction.type);
+  badgeElement.textContent = `${transaction.type === "income" ? "수입" : "지출"} · ${transaction.category} · ${getPaymentMethodLabel(
+    transaction.paymentMethod
+  )}`;
+  memoElement.textContent = transaction.memo || "메모 없음";
+
+  if (showDate) {
+    dateElement.textContent = formatDate(transaction.date);
+  } else {
+    item.classList.add("transaction-item-compact");
+    dateElement.remove();
+  }
+
+  return item;
 }
 
 function renderTransactions() {
@@ -715,6 +841,10 @@ function getTransactionsForMonth(monthKey) {
   return appState.transactions.filter((transaction) => transaction.date.startsWith(monthKey));
 }
 
+function getTransactionsForDate(dateKey) {
+  return appState.transactions.filter((transaction) => transaction.date === dateKey).sort(sortTransactions);
+}
+
 function getSummaryMonth() {
   return elements.summaryMonth.value || getLatestDataMonth() || getCurrentMonthKey();
 }
@@ -824,6 +954,36 @@ function createLedgerEmptyState() {
 }
 
 // [Codex] 상단 달력 아이콘은 연도와 월을 명시적으로 선택하는 시트로 연결해 iPhone에서도 연도 변경이 바로 가능하게 했습니다.
+// [Codex] 선택한 날짜를 별도 하단 시트로 띄워 홈 달력 안에서 바로 확인하고, 닫으면 선택 강조도 함께 정리합니다.
+function openCalendarDetailSheet(dateKey) {
+  activeCalendarDate = dateKey;
+  elements.calendarDetailSheet.hidden = false;
+  renderSummary();
+}
+
+function closeCalendarDetailSheet(options = {}) {
+  const { rerender = true } = options;
+  elements.calendarDetailSheet.hidden = true;
+  activeCalendarDate = "";
+  elements.calendarGrid.querySelectorAll(".calendar-day.is-selected").forEach((dayCell) => {
+    dayCell.classList.remove("is-selected");
+  });
+
+  if (rerender) {
+    renderSummary();
+  }
+}
+
+function getCalendarDayAriaLabel(dateKey, summary) {
+  if (summary.count === 0) {
+    return `${formatDate(dateKey)} 거래 없음`;
+  }
+
+  return `${formatDate(dateKey)} 거래 ${summary.count}건, 수입 ${formatCurrency(summary.income)}, 지출 ${formatCurrency(
+    summary.expense
+  )}`;
+}
+
 function openMonthSheet() {
   populateMonthPickerYears();
   syncMonthPickerFromSummaryMonth();

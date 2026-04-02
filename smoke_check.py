@@ -22,6 +22,8 @@ REQUIRED_IDS = {
     "summary-month",
     "entry-form",
     "calendar-grid",
+    "calendar-detail-sheet",
+    "calendar-detail-list",
     "category-breakdown",
     "transaction-list",
     "export-button",

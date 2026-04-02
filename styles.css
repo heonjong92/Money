@@ -342,6 +342,50 @@ legend {
   box-shadow: 0 -18px 40px rgba(23, 29, 40, 0.14);
 }
 
+/* [Codex] 날짜 상세 시트는 요약과 거래 목록을 한 번에 보되 목록만 내부 스크롤되도록 높이 축을 분리합니다. */
+.calendar-detail-card {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  gap: 0.8rem;
+  max-height: min(78vh, 42rem);
+  min-height: 20rem;
+}
+
+.calendar-detail-header {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.75rem;
+  align-items: start;
+}
+
+.calendar-detail-close {
+  min-width: 4.7rem;
+}
+
+.calendar-detail-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.45rem;
+}
+
+.calendar-detail-metric {
+  padding: 0.55rem 0.62rem;
+}
+
+.calendar-detail-note {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.calendar-detail-list {
+  display: grid;
+  gap: 0.65rem;
+  min-height: 0;
+  overflow-y: auto;
+  padding-right: 0.1rem;
+}
+
 .quick-actions,
 .backup-actions,
 .button-row {
@@ -545,6 +589,10 @@ legend {
   border: 1px solid var(--line);
 }
 
+.transaction-item.transaction-item-compact {
+  padding: 0.85rem 0.9rem;
+}
+
 .transaction-main {
   flex: 1;
   min-width: 0;
@@ -613,14 +661,22 @@ legend {
   align-items: stretch;
   align-content: start;
   gap: 0.22rem;
+  width: 100%;
   padding: 0.42rem 0.26rem;
   border-radius: 14px;
   background: var(--surface-soft);
   border: 1px solid var(--line);
+  appearance: none;
+  text-align: left;
+  cursor: pointer;
 }
 
 .calendar-day.is-outside {
   opacity: 0.34;
+}
+
+.calendar-day:disabled {
+  cursor: default;
 }
 
 .calendar-day.is-today {
@@ -630,6 +686,17 @@ legend {
 
 .calendar-day.has-entry {
   background: linear-gradient(180deg, rgba(255, 249, 242, 0.98), rgba(247, 248, 251, 0.98));
+}
+
+.calendar-day.is-selected {
+  border-color: rgba(241, 154, 62, 0.92);
+  box-shadow: inset 0 0 0 1px rgba(241, 154, 62, 0.22), 0 10px 18px rgba(241, 154, 62, 0.12);
+}
+
+.calendar-day:focus-visible {
+  outline: none;
+  border-color: rgba(241, 154, 62, 0.92);
+  box-shadow: 0 0 0 3px rgba(241, 154, 62, 0.18);
 }
 
 .calendar-day-number {
