@@ -73,7 +73,6 @@ const elements = {
   statBalance: document.querySelector("#stat-balance"),
   statIncome: document.querySelector("#stat-income"),
   statExpense: document.querySelector("#stat-expense"),
-  statCount: document.querySelector("#stat-count"),
   headlineCard: document.querySelector(".headline-card"),
   calendarMonthCaption: document.querySelector("#calendar-month-caption"),
   calendarGrid: document.querySelector("#calendar-grid"),
@@ -493,12 +492,10 @@ function renderSummary() {
   const income = sumTransactions(monthTransactions, "income");
   const expense = sumTransactions(monthTransactions, "expense");
   const balance = income - expense;
-  const transactionCount = monthTransactions.length;
 
   elements.statBalance.textContent = formatCurrency(balance);
   elements.statIncome.textContent = formatCurrency(income);
   elements.statExpense.textContent = formatCurrency(expense);
-  elements.statCount.textContent = `${transactionCount}건`;
   elements.headerMonthLabel.textContent = `${formatMonthLabel(monthKey)} 가계부`;
   elements.calendarMonthCaption.textContent = `${formatMonthLabel(monthKey)} 기준`;
   elements.analysisMonthLabel.textContent = `${formatMonthLabel(monthKey)} 기준`;

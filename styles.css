@@ -1980,3 +1980,72 @@ legend {
     font-size: 0.66rem;
   }
 }
+
+/* [Codex] 홈 상단 요약은 최종적으로 잔액, 수입, 지출만 한 줄 바 형태로 고정해 달력 영역을 최대한 넓게 확보합니다. */
+header .headline-card {
+  display: flex;
+  align-items: center;
+  gap: 0.24rem;
+  flex-wrap: nowrap;
+  min-height: 0;
+  padding: 0.3rem 0.4rem;
+}
+
+header .headline-card > .headline-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 0.96rem;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+header .headline-card > .headline-metrics {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, auto);
+  gap: 0.16rem;
+  width: auto;
+  margin: 0;
+  flex: 0 0 auto;
+}
+
+header .headline-card .metric-chip {
+  min-width: 3.2rem;
+  padding: 0.16rem 0.24rem;
+  border-radius: 1rem;
+}
+
+header .headline-card .metric-chip span {
+  margin-bottom: 0.02rem;
+  font-size: 0.48rem;
+}
+
+header .headline-card .metric-chip strong {
+  font-size: 0.6rem;
+  line-height: 1.05;
+}
+
+@media (max-width: 420px) {
+  header .headline-card {
+    gap: 0.18rem;
+    padding: 0.26rem 0.34rem;
+  }
+
+  header .headline-card > .headline-value {
+    font-size: 0.9rem;
+  }
+
+  header .headline-card .metric-chip {
+    min-width: 2.95rem;
+    padding: 0.14rem 0.2rem;
+  }
+
+  header .headline-card .metric-chip span {
+    font-size: 0.46rem;
+  }
+
+  header .headline-card .metric-chip strong {
+    font-size: 0.56rem;
+  }
+}
