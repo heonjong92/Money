@@ -1066,9 +1066,13 @@ function registerServiceWorker() {
     return;
   }
 
-  navigator.serviceWorker.register("sw.js").catch((error) => {
-    console.error(error);
-  });
+  // [Codex] 새 배포를 열 때마다 서비스 워커 업데이트를 한 번 더 확인해 GitHub Pages에서도 이전 앱 셸이 오래 남지 않게 합니다.
+  navigator.serviceWorker
+    .register("sw.js")
+    .then((registration) => registration.update())
+    .catch((error) => {
+      console.error(error);
+    });
 }
 
 function getTransactionsForMonth(monthKey) {
