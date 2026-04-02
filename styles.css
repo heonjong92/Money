@@ -350,7 +350,7 @@ legend {
 }
 
 .headline-card {
-  padding: 0.56rem 0.68rem;
+  padding: 0.42rem 0.56rem;
   background:
     radial-gradient(circle at top right, rgba(255, 219, 231, 0.72), transparent 34%),
     radial-gradient(circle at left bottom, rgba(247, 233, 239, 0.66), transparent 26%),
@@ -360,7 +360,7 @@ legend {
 .headline-value {
   display: block;
   margin-top: 0.1rem;
-  font-size: clamp(1.34rem, 4.8vw, 1.82rem);
+  font-size: clamp(1.18rem, 4.2vw, 1.6rem);
   letter-spacing: -0.05em;
 }
 
@@ -375,15 +375,15 @@ legend {
 
 .headline-note {
   margin: 0.12rem 0 0;
-  font-size: 0.74rem;
-  line-height: 1.32;
+  font-size: 0.68rem;
+  line-height: 1.24;
 }
 
 .headline-metrics {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 0.35rem;
-  margin-top: 0.32rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.24rem;
+  margin-top: 0.24rem;
   align-items: stretch;
 }
 
@@ -395,7 +395,7 @@ legend {
   align-content: space-between;
   gap: 0.2rem;
   min-width: 0;
-  padding: 0.36rem 0.46rem;
+  padding: 0.28rem 0.36rem;
   border-radius: var(--radius-md);
   background: rgba(255, 251, 252, 0.76);
   border: 1px solid rgba(222, 191, 204, 0.28);
@@ -405,7 +405,7 @@ legend {
 .metric-chip span {
   display: block;
   width: 100%;
-  font-size: 0.68rem;
+  font-size: 0.62rem;
   color: var(--muted);
   text-align: right;
 }
@@ -413,10 +413,15 @@ legend {
 .metric-chip strong {
   display: block;
   width: 100%;
-  font-size: 0.84rem;
+  font-size: 0.76rem;
   letter-spacing: -0.03em;
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* [Codex] 홈 요약에서 기록 수는 숨기고 수입과 지출만 남겨 카드 높이를 더 낮춥니다. */
+.metric-chip-hidden {
+  display: none;
 }
 
 .metric-chip .income,
@@ -1402,27 +1407,32 @@ legend {
   }
 
   .headline-card {
-    padding: 0.48rem 0.58rem;
+    padding: 0.38rem 0.48rem;
   }
 
   .headline-value {
-    font-size: 1.24rem;
+    font-size: 1.08rem;
   }
 
   .headline-note {
-    font-size: 0.7rem;
+    font-size: 0.64rem;
+  }
+
+  .headline-metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.22rem;
   }
 
   .metric-chip {
-    padding: 0.3rem 0.34rem;
+    padding: 0.24rem 0.3rem;
   }
 
   .metric-chip span {
-    font-size: 0.62rem;
+    font-size: 0.58rem;
   }
 
   .metric-chip strong {
-    font-size: 0.76rem;
+    font-size: 0.7rem;
   }
 
   /* [Codex] 기록 탭은 세로 스크롤 대신 한 화면 안에서 끝나도록 카드와 폼 간격, 입력 높이, 버튼 배치를 더 촘촘하게 맞춥니다. */
