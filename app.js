@@ -1,0 +1,985 @@
+// [Codex] 로컬 저장소 기반 개인용 가계부 상태 정의입니다. 서버 없이도 iPhone Safari에서 바로 사용할 수 있습니다.
+const STORAGE_KEY = "money-pocket-v1";
+const APP_STATE_VERSION = 1;
+const CATEGORY_MAP = {
+  expense: [
+    "식비",
+    "교통",
+    "장보기",
+    "카페",
+    "구독",
+    "생활",
+    "주거",
+    "건강",
+    "여가",
+    "기타 지출",
+  ],
+  income: ["급여", "보너스", "부수입", "환급", "이자", "기타 수입"],
+};
+const PAYMENT_METHOD_MAP = {
+  cash: "현금",
+  credit: "신용카드",
+  debit: "체크카드",
+};
+
+let appState = loadState();
+let editingTransactionId = null;
+let installPromptEvent = null;
+let toastTimer = null;
+let activeMobileView = "summary";
+
+const elements = {
+  mobileViewerNav: document.querySelector("#mobile-viewer-nav"),
+  sectionTrack: document.querySelector("#section-track"),
+  monthPickerButton: document.querySelector("#month-picker-button"),
+  monthSheet: document.querySelector("#month-sheet"),
+  monthSheetBackdrop: document.querySelector("#month-sheet-backdrop"),
+  monthPickerYear: document.querySelector("#month-picker-year"),
+  monthPickerMonth: document.querySelector("#month-picker-month"),
+  monthSheetCancel: document.querySelector("#month-sheet-cancel"),
+  monthSheetApply: document.querySelector("#month-sheet-apply"),
+  summaryMonth: document.querySelector("#summary-month"),
+  headerMonthLabel: document.querySelector("#header-month-label"),
+  filterMonth: document.querySelector("#filter-month"),
+  filterScope: document.querySelector("#filter-scope"),
+  filterType: document.querySelector("#filter-type"),
+  filterCategory: document.querySelector("#filter-category"),
+  filterPaymentMethod: document.querySelector("#filter-payment-method"),
+  searchInput: document.querySelector("#search-input"),
+  statBalance: document.querySelector("#stat-balance"),
+  statBalanceNote: document.querySelector("#stat-balance-note"),
+  statIncome: document.querySelector("#stat-income"),
+  statExpense: document.querySelector("#stat-expense"),
+  statCount: document.querySelector("#stat-count"),
+  calendarMonthCaption: document.querySelector("#calendar-month-caption"),
+  calendarGrid: document.querySelector("#calendar-grid"),
+  entryForm: document.querySelector("#entry-form"),
+  categoryInput: document.querySelector("#category-input"),
+  paymentMethodInput: document.querySelector("#payment-method-input"),
+  dateInput: document.querySelector("#date-input"),
+  amountInput: document.querySelector("#amount-input"),
+  memoInput: document.querySelector("#memo-input"),
+  submitButton: document.querySelector("#submit-button"),
+  cancelEditButton: document.querySelector("#cancel-edit-button"),
+  formModeLabel: document.querySelector("#form-mode-label"),
+  analysisMonthLabel: document.querySelector("#analysis-month-label"),
+  categoryBreakdown: document.querySelector("#category-breakdown"),
+  transactionList: document.querySelector("#transaction-list"),
+  filterCount: document.querySelector("#filter-count"),
+  exportButton: document.querySelector("#export-button"),
+  importButton: document.querySelector("#import-button"),
+  importFileInput: document.querySelector("#import-file-input"),
+  resetButton: document.querySelector("#reset-button"),
+  installButton: document.querySelector("#install-button"),
+  installHint: document.querySelector("#install-hint"),
+  connectionState: document.querySelector("#connection-state"),
+  toast: document.querySelector("#toast"),
+  transactionItemTemplate: document.querySelector("#transaction-item-template"),
+  categoryItemTemplate: document.querySelector("#category-item-template"),
+  mobileViewButtons: [...document.querySelectorAll(".tab-button")],
+  mobileViewPanels: [...document.querySelectorAll("[data-view-panel]")],
+};
+
+initializeApp();
+
+function initializeApp() {
+  const today = getLocalDateString(new Date());
+  const initialMonth = getLatestDataMonth() || getCurrentMonthKey();
+
+  elements.dateInput.value = today;
+  // [Codex] 거래나 예산이 있는 가장 최근 월을 기본으로 열어 월이 바뀐 날에도 기록이 사라진 것처럼 보이지 않게 합니다.
+  setActiveMonth(initialMonth);
+
+  bindEvents();
+  initializeMobileViewer();
+  syncEntryCategoryOptions();
+  syncFilterCategoryOptions();
+  renderAll();
+  updateConnectionState();
+  updateInstallHint();
+  registerServiceWorker();
+}
+
+function bindEvents() {
+  document.addEventListener("click", handleViewTargetClick);
+  elements.entryForm.addEventListener("submit", handleEntrySubmit);
+  elements.cancelEditButton.addEventListener("click", resetEntryForm);
+  elements.monthPickerButton.addEventListener("click", openMonthSheet);
+  elements.monthSheetBackdrop.addEventListener("click", closeMonthSheet);
+  elements.monthSheetCancel.addEventListener("click", closeMonthSheet);
+  elements.monthSheetApply.addEventListener("click", applySelectedMonthFromSheet);
+  elements.summaryMonth.addEventListener("change", handleSummaryMonthChange);
+  elements.filterMonth.addEventListener("change", renderTransactions);
+  elements.filterScope.addEventListener("change", renderTransactions);
+  elements.filterType.addEventListener("change", handleFilterTypeChange);
+  elements.filterCategory.addEventListener("change", renderTransactions);
+  elements.filterPaymentMethod.addEventListener("change", renderTransactions);
+  elements.searchInput.addEventListener("input", renderTransactions);
+  elements.exportButton.addEventListener("click", exportData);
+  elements.importButton.addEventListener("click", () => elements.importFileInput.click());
+  elements.importFileInput.addEventListener("change", importData);
+  elements.resetButton.addEventListener("click", resetAllData);
+  elements.installButton.addEventListener("click", handleInstallClick);
+  elements.transactionList.addEventListener("click", handleTransactionAction);
+
+  document.querySelectorAll('input[name="type"]').forEach((radio) => {
+    radio.addEventListener("change", syncEntryCategoryOptions);
+  });
+
+  window.addEventListener("beforeinstallprompt", (event) => {
+    event.preventDefault();
+    installPromptEvent = event;
+    updateInstallHint();
+  });
+
+  window.addEventListener("appinstalled", () => {
+    installPromptEvent = null;
+    showToast("홈 화면 앱으로 설치되었습니다.");
+    updateInstallHint();
+  });
+
+  window.addEventListener("online", updateConnectionState);
+  window.addEventListener("offline", updateConnectionState);
+}
+
+function handleEntrySubmit(event) {
+  event.preventDefault();
+
+  const payload = getEntryPayload();
+  if (!payload) {
+    return;
+  }
+
+  if (editingTransactionId) {
+    appState.transactions = appState.transactions.map((transaction) =>
+      transaction.id === editingTransactionId ? { ...transaction, ...payload } : transaction
+    );
+    showToast("거래를 수정했습니다.");
+  } else {
+    appState.transactions.unshift({
+      id: createId(),
+      createdAt: new Date().toISOString(),
+      ...payload,
+    });
+    showToast("거래를 저장했습니다.");
+  }
+
+  persistState();
+  resetEntryForm();
+  renderAll();
+  setActiveMobileView("summary");
+}
+
+function handleSummaryMonthChange() {
+  // [Codex] 상단 월을 바꾸면 홈 요약과 내역 월 필터를 함께 맞춰 앱형 흐름이 끊기지 않게 유지합니다.
+  elements.filterMonth.value = getSummaryMonth();
+  renderSummary();
+  renderTransactions();
+}
+
+function handleFilterTypeChange() {
+  syncFilterCategoryOptions();
+  renderTransactions();
+}
+
+function handleTransactionAction(event) {
+  const actionButton = event.target.closest("button");
+  if (!actionButton) {
+    return;
+  }
+
+  const item = actionButton.closest(".transaction-item");
+  if (!item) {
+    return;
+  }
+
+  const transactionId = item.dataset.transactionId;
+  const transaction = appState.transactions.find((entry) => entry.id === transactionId);
+  if (!transaction) {
+    return;
+  }
+
+  if (actionButton.classList.contains("edit-button")) {
+    startEditingTransaction(transaction);
+    return;
+  }
+
+  if (actionButton.classList.contains("delete-button")) {
+    const confirmed = window.confirm("이 거래를 삭제할까요?");
+    if (!confirmed) {
+      return;
+    }
+
+    appState.transactions = appState.transactions.filter((entry) => entry.id !== transactionId);
+    persistState();
+
+    if (editingTransactionId === transactionId) {
+      resetEntryForm();
+    }
+
+    renderAll();
+    showToast("거래를 삭제했습니다.");
+  }
+}
+
+function getEntryPayload() {
+  const type = getSelectedType();
+  const amount = normalizeAmount(elements.amountInput.value);
+  const category = elements.categoryInput.value;
+  const paymentMethod = elements.paymentMethodInput.value;
+  const date = elements.dateInput.value;
+  const memo = elements.memoInput.value.trim();
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    showToast("금액을 0보다 크게 입력하세요.");
+    return null;
+  }
+
+  if (!date) {
+    showToast("날짜를 선택하세요.");
+    return null;
+  }
+
+  if (!category) {
+    showToast("카테고리를 선택하세요.");
+    return null;
+  }
+
+  if (!PAYMENT_METHOD_MAP[paymentMethod]) {
+    showToast("사용 수단을 선택하세요.");
+    return null;
+  }
+
+  return {
+    type,
+    amount,
+    category,
+    paymentMethod,
+    date,
+    memo,
+    updatedAt: new Date().toISOString(),
+  };
+}
+
+function startEditingTransaction(transaction) {
+  editingTransactionId = transaction.id;
+  setSelectedType(transaction.type);
+  syncEntryCategoryOptions(transaction.category);
+
+  elements.amountInput.value = transaction.amount;
+  elements.paymentMethodInput.value = transaction.paymentMethod || "cash";
+  elements.dateInput.value = transaction.date;
+  elements.memoInput.value = transaction.memo;
+  elements.formModeLabel.textContent = "거래 수정 중";
+  elements.submitButton.textContent = "수정 저장";
+  elements.cancelEditButton.hidden = false;
+  // [Codex] 수정 진입 시 기록 화면으로 바로 이동해 탭 기반 구조에서도 편집 흐름이 자연스럽게 이어지게 합니다.
+  setActiveMobileView("entry");
+  getMobileViewPanel("entry")?.scrollTo({ top: 0, behavior: "smooth" });
+}
+
+function resetEntryForm() {
+  editingTransactionId = null;
+  elements.entryForm.reset();
+  setSelectedType("expense");
+  elements.dateInput.value = getLocalDateString(new Date());
+  elements.paymentMethodInput.value = "cash";
+  elements.formModeLabel.textContent = "새 거래 추가";
+  elements.submitButton.textContent = "저장";
+  elements.cancelEditButton.hidden = true;
+  syncEntryCategoryOptions();
+}
+
+function renderAll() {
+  renderSummary();
+  renderTransactions();
+}
+
+function initializeMobileViewer() {
+  // [Codex] 하단 탭바와 본문 패널을 직접 토글하는 방식으로 화면 전환 구조를 단순화했습니다.
+  setActiveMobileView(activeMobileView);
+  syncMonthPickerFromSummaryMonth();
+}
+
+function handleViewTargetClick(event) {
+  const targetButton = event.target.closest("[data-view-target]");
+  if (!targetButton) {
+    return;
+  }
+
+  setActiveMobileView(targetButton.dataset.viewTarget);
+}
+
+function getMobileViewPanel(viewName) {
+  return elements.mobileViewPanels.find((panel) => panel.dataset.viewPanel === viewName);
+}
+
+function setActiveMobileView(viewName) {
+  const targetPanel = getMobileViewPanel(viewName);
+  if (!targetPanel) {
+    return;
+  }
+
+  activeMobileView = viewName;
+  updateMobileViewerButtons();
+  elements.mobileViewPanels.forEach((panel) => {
+    panel.classList.toggle("is-active", panel === targetPanel);
+  });
+}
+
+function updateMobileViewerButtons() {
+  elements.mobileViewButtons.forEach((button) => {
+    const isActive = button.dataset.viewTarget === activeMobileView;
+    button.classList.toggle("is-active", isActive);
+    button.setAttribute("aria-pressed", String(isActive));
+  });
+}
+
+function renderSummary() {
+  const monthKey = getSummaryMonth();
+  const monthTransactions = getTransactionsForMonth(monthKey);
+  const income = sumTransactions(monthTransactions, "income");
+  const expense = sumTransactions(monthTransactions, "expense");
+  const balance = income - expense;
+  const transactionCount = monthTransactions.length;
+  const latestDataMonth = getLatestDataMonth();
+
+  elements.statBalance.textContent = formatCurrency(balance);
+  elements.statIncome.textContent = formatCurrency(income);
+  elements.statExpense.textContent = formatCurrency(expense);
+  elements.statCount.textContent = `${transactionCount}건`;
+  elements.headerMonthLabel.textContent = `${formatMonthLabel(monthKey)} 가계부`;
+  // [Codex] 선택한 월이 비어 있으면 최근 기록이 있는 월을 바로 알려줘서 데이터가 없어진 것으로 오해하지 않게 합니다.
+  elements.statBalanceNote.textContent = getSummaryNote({
+    balance,
+    monthKey,
+    latestDataMonth,
+    transactionCount,
+  });
+  elements.calendarMonthCaption.textContent = `${formatMonthLabel(monthKey)} 기준`;
+  elements.analysisMonthLabel.textContent = `${formatMonthLabel(monthKey)} 기준`;
+  renderCalendarView(monthTransactions, monthKey);
+  renderCategoryBreakdown(monthTransactions);
+}
+
+function renderCategoryBreakdown(monthTransactions) {
+  const expenseTransactions = monthTransactions.filter((transaction) => transaction.type === "expense");
+  const totalExpense = sumTransactions(expenseTransactions, "expense");
+  elements.categoryBreakdown.replaceChildren();
+
+  if (expenseTransactions.length === 0) {
+    elements.categoryBreakdown.appendChild(createEmptyState("아직 지출 데이터가 없습니다."));
+    return;
+  }
+
+  const totalsByCategory = expenseTransactions.reduce((accumulator, transaction) => {
+    accumulator[transaction.category] = (accumulator[transaction.category] || 0) + transaction.amount;
+    return accumulator;
+  }, {});
+
+  Object.entries(totalsByCategory)
+    .sort((left, right) => right[1] - left[1])
+    .forEach(([categoryName, amount]) => {
+      const fragment = elements.categoryItemTemplate.content.cloneNode(true);
+      fragment.querySelector(".category-name").textContent = categoryName;
+      fragment.querySelector(".category-value").textContent = `${formatCurrency(amount)} · ${Math.round(
+        (amount / totalExpense) * 100
+      )}%`;
+      fragment.querySelector(".category-bar-fill").style.width = `${(amount / totalExpense) * 100}%`;
+      elements.categoryBreakdown.appendChild(fragment);
+    });
+}
+
+// [Codex] 홈 달력은 날짜별 수입/지출 합계를 같은 칸에 넣어 월간 흐름을 한 번에 읽을 수 있게 구성했습니다.
+function renderCalendarView(monthTransactions, monthKey) {
+  elements.calendarGrid.replaceChildren();
+
+  const [year, month] = monthKey.split("-").map(Number);
+  const firstDate = new Date(year, month - 1, 1);
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const firstWeekday = firstDate.getDay();
+  const leadingDays = firstWeekday;
+  const trailingDays = (7 - ((leadingDays + daysInMonth) % 7 || 7)) % 7;
+  const transactionSummaryMap = summarizeTransactionsByDate(monthTransactions);
+  const today = getLocalDateString(new Date());
+
+  for (let index = 0; index < leadingDays + daysInMonth + trailingDays; index += 1) {
+    const dayOffset = index - leadingDays + 1;
+    const currentDate = new Date(year, month - 1, dayOffset);
+    const cellDate = getLocalDateString(currentDate);
+    const isCurrentMonth = currentDate.getMonth() === month - 1;
+    const summary = transactionSummaryMap.get(cellDate) || { income: 0, expense: 0, count: 0 };
+
+    const dayCell = document.createElement("article");
+    dayCell.className = "calendar-day";
+    if (!isCurrentMonth) {
+      dayCell.classList.add("is-outside");
+    }
+    if (cellDate === today) {
+      dayCell.classList.add("is-today");
+    }
+    if (summary.count > 0) {
+      dayCell.classList.add("has-entry");
+    }
+
+    const dayNumber = document.createElement("span");
+    dayNumber.className = "calendar-day-number";
+    dayNumber.textContent = String(currentDate.getDate());
+
+    const dayMeta = document.createElement("div");
+    dayMeta.className = "calendar-day-meta";
+
+    if (summary.count > 0 && isCurrentMonth) {
+      const incomeLine = document.createElement("span");
+      incomeLine.className = "calendar-day-line income";
+      incomeLine.textContent = summary.income > 0 ? formatCalendarAmount(summary.income) : "";
+
+      const expenseLine = document.createElement("span");
+      expenseLine.className = "calendar-day-line expense";
+      expenseLine.textContent = summary.expense > 0 ? formatCalendarAmount(summary.expense) : "";
+
+      dayMeta.append(incomeLine, expenseLine);
+    } else if (isCurrentMonth) {
+      const emptyLine = document.createElement("span");
+      emptyLine.className = "calendar-day-line";
+      emptyLine.textContent = "";
+      dayMeta.append(emptyLine);
+    }
+
+    dayCell.append(dayNumber, dayMeta);
+    elements.calendarGrid.appendChild(dayCell);
+  }
+}
+
+function renderTransactions() {
+  const transactions = getFilteredTransactions();
+  elements.transactionList.replaceChildren();
+  elements.filterCount.textContent = `${transactions.length}건 표시 중`;
+
+  if (transactions.length === 0) {
+    elements.transactionList.appendChild(createLedgerEmptyState());
+    return;
+  }
+
+  const groups = transactions.reduce((accumulator, transaction) => {
+    if (!accumulator.has(transaction.date)) {
+      accumulator.set(transaction.date, []);
+    }
+
+    accumulator.get(transaction.date).push(transaction);
+    return accumulator;
+  }, new Map());
+
+  groups.forEach((items, dateKey) => {
+    const group = document.createElement("section");
+    group.className = "ledger-group";
+
+    const header = document.createElement("div");
+    header.className = "ledger-group-header";
+
+    const title = document.createElement("strong");
+    title.textContent = formatDate(dateKey);
+
+    const total = items.reduce(
+      (sum, transaction) => sum + (transaction.type === "income" ? transaction.amount : -transaction.amount),
+      0
+    );
+    const totalText = document.createElement("span");
+    totalText.textContent = `${items.length}건 · ${total >= 0 ? "+" : "-"} ${formatCurrency(Math.abs(total))}`;
+
+    const body = document.createElement("div");
+    body.className = "ledger-group-body";
+
+    header.append(title, totalText);
+    group.append(header, body);
+
+    items.forEach((transaction) => {
+      const fragment = elements.transactionItemTemplate.content.cloneNode(true);
+      const item = fragment.querySelector(".transaction-item");
+      const amountElement = fragment.querySelector(".transaction-amount");
+      const badgeElement = fragment.querySelector(".transaction-badge");
+      const dateElement = fragment.querySelector(".transaction-date");
+      const memoElement = fragment.querySelector(".transaction-memo");
+
+      item.dataset.transactionId = transaction.id;
+      amountElement.textContent = `${transaction.type === "income" ? "+" : "-"} ${formatCurrency(transaction.amount)}`;
+      amountElement.classList.add(transaction.type);
+      badgeElement.textContent = `${transaction.type === "income" ? "수입" : "지출"} · ${transaction.category} · ${getPaymentMethodLabel(
+        transaction.paymentMethod
+      )}`;
+      dateElement.textContent = formatDate(transaction.date);
+      memoElement.textContent = transaction.memo || "메모 없음";
+
+      body.appendChild(fragment);
+    });
+
+    elements.transactionList.appendChild(group);
+  });
+}
+
+function getFilteredTransactions() {
+  const scope = elements.filterScope.value;
+  const monthKey = elements.filterMonth.value;
+  const type = elements.filterType.value;
+  const category = elements.filterCategory.value;
+  const paymentMethod = elements.filterPaymentMethod.value;
+  const searchKeyword = elements.searchInput.value.trim().toLowerCase();
+
+  return [...appState.transactions]
+    .filter((transaction) => {
+      if (scope === "month" && monthKey && !transaction.date.startsWith(monthKey)) {
+        return false;
+      }
+
+      if (type !== "all" && transaction.type !== type) {
+        return false;
+      }
+
+      if (category !== "all" && transaction.category !== category) {
+        return false;
+      }
+
+      if (paymentMethod !== "all" && transaction.paymentMethod !== paymentMethod) {
+        return false;
+      }
+
+      if (
+        searchKeyword &&
+        !`${transaction.memo} ${transaction.category} ${getPaymentMethodLabel(transaction.paymentMethod)}`
+          .toLowerCase()
+          .includes(searchKeyword)
+      ) {
+        return false;
+      }
+
+      return true;
+    })
+    .sort(sortTransactions);
+}
+
+function summarizeTransactionsByDate(transactions) {
+  return transactions.reduce((accumulator, transaction) => {
+    if (!accumulator.has(transaction.date)) {
+      accumulator.set(transaction.date, { income: 0, expense: 0, count: 0 });
+    }
+
+    const summary = accumulator.get(transaction.date);
+    summary[transaction.type] += transaction.amount;
+    summary.count += 1;
+    return accumulator;
+  }, new Map());
+}
+
+function syncEntryCategoryOptions(selectedValue) {
+  populateCategorySelect(elements.categoryInput, getSelectedType(), selectedValue);
+}
+
+function syncFilterCategoryOptions() {
+  const filterType = elements.filterType.value;
+  const categoryOptions =
+    filterType === "all"
+      ? [...CATEGORY_MAP.expense, ...CATEGORY_MAP.income]
+      : CATEGORY_MAP[filterType];
+
+  populateCategorySelect(elements.filterCategory, "all", elements.filterCategory.value, categoryOptions);
+}
+
+function populateCategorySelect(selectElement, type, selectedValue, customOptions) {
+  const options = customOptions || CATEGORY_MAP[type];
+  const currentValue = selectedValue && options.includes(selectedValue) ? selectedValue : options[0];
+  const filterValue = selectedValue && options.includes(selectedValue) ? selectedValue : "all";
+  selectElement.replaceChildren();
+
+  if (selectElement === elements.filterCategory) {
+    selectElement.appendChild(new Option("전체", "all"));
+  }
+
+  options.forEach((categoryName) => {
+    selectElement.appendChild(new Option(categoryName, categoryName));
+  });
+
+  selectElement.value = selectElement === elements.filterCategory ? filterValue : currentValue;
+}
+
+function exportData() {
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    app: "Money Pocket",
+    state: appState,
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `money-pocket-backup-${getLocalDateString(new Date())}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  showToast("백업 파일을 내보냈습니다.");
+}
+
+// [Codex] JSON 가져오기는 구조를 검증한 뒤 전체 상태를 교체하도록 해 데이터 손상을 줄였습니다.
+async function importData(event) {
+  const file = event.target.files?.[0];
+  if (!file) {
+    return;
+  }
+
+  try {
+    const raw = await file.text();
+    const parsed = JSON.parse(raw);
+    const nextState = normalizeState(parsed.state || parsed);
+    const confirmed = window.confirm("현재 데이터를 가져온 파일 내용으로 교체할까요?");
+    if (!confirmed) {
+      return;
+    }
+
+    appState = nextState;
+    persistState();
+    resetEntryForm();
+    // [Codex] 복원 직후에도 가장 최근 데이터 월로 맞춰 사용자가 즉시 복원 결과를 확인할 수 있게 합니다.
+    setActiveMonth(getLatestDataMonth(appState) || getCurrentMonthKey());
+    renderAll();
+    showToast("백업 파일을 복원했습니다.");
+  } catch (error) {
+    console.error(error);
+    showToast("JSON 파일을 읽지 못했습니다.");
+  } finally {
+    event.target.value = "";
+  }
+}
+
+function resetAllData() {
+  const confirmed = window.confirm("모든 거래와 예산 데이터를 삭제할까요?");
+  if (!confirmed) {
+    return;
+  }
+
+  appState = createDefaultState();
+  persistState();
+  resetEntryForm();
+  // [Codex] 전체 초기화 뒤에는 현재 월로 되돌려 새 기록 시작 지점을 명확하게 맞춥니다.
+  setActiveMonth(getCurrentMonthKey());
+  renderAll();
+  showToast("모든 데이터를 삭제했습니다.");
+}
+
+function handleInstallClick() {
+  if (!installPromptEvent) {
+    showToast("Safari 공유 메뉴에서 홈 화면에 추가를 사용하세요.");
+    return;
+  }
+
+  installPromptEvent.prompt();
+  installPromptEvent.userChoice.finally(() => {
+    installPromptEvent = null;
+    updateInstallHint();
+  });
+}
+
+function updateInstallHint() {
+  const isStandalone = window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+  const isIos = /iphone|ipad|ipod/i.test(window.navigator.userAgent);
+
+  if (isStandalone) {
+    elements.installButton.hidden = true;
+    elements.installHint.textContent = "현재 홈 화면 앱으로 실행 중입니다.";
+    return;
+  }
+
+  if (installPromptEvent) {
+    elements.installButton.hidden = false;
+    elements.installHint.textContent = "지원되는 브라우저에서는 버튼으로 바로 설치할 수 있습니다.";
+    return;
+  }
+
+  elements.installButton.hidden = true;
+  elements.installHint.textContent = isIos
+    ? "iPhone Safari의 공유 버튼에서 홈 화면에 추가를 선택하면 앱처럼 사용할 수 있습니다."
+    : "브라우저 메뉴의 설치 또는 홈 화면 추가 기능을 사용하세요.";
+}
+
+function updateConnectionState() {
+  elements.connectionState.textContent = navigator.onLine ? "오프라인 캐시 준비 가능" : "오프라인 모드";
+}
+
+function registerServiceWorker() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  navigator.serviceWorker.register("sw.js").catch((error) => {
+    console.error(error);
+  });
+}
+
+function getTransactionsForMonth(monthKey) {
+  return appState.transactions.filter((transaction) => transaction.date.startsWith(monthKey));
+}
+
+function getSummaryMonth() {
+  return elements.summaryMonth.value || getLatestDataMonth() || getCurrentMonthKey();
+}
+
+// [Codex] 거래와 예산을 함께 기준으로 잡아 사용자가 마지막으로 관리하던 월을 기본 진입점으로 사용합니다.
+function getLatestDataMonth(sourceState = appState) {
+  const transactionMonths = sourceState.transactions.map((transaction) => transaction.date.slice(0, 7));
+  const budgetMonths = Object.keys(sourceState.budgets);
+  const monthCandidates = [...new Set([...transactionMonths, ...budgetMonths])]
+    .filter((monthKey) => /^\d{4}-\d{2}$/.test(monthKey))
+    .sort();
+
+  return monthCandidates[monthCandidates.length - 1] || "";
+}
+
+function getCurrentMonthKey() {
+  return getLocalDateString(new Date()).slice(0, 7);
+}
+
+function setActiveMonth(monthKey) {
+  const nextMonthKey = monthKey || getLatestDataMonth() || getCurrentMonthKey();
+  elements.summaryMonth.value = nextMonthKey;
+  elements.filterMonth.value = nextMonthKey;
+  syncMonthPickerFromSummaryMonth();
+}
+
+function getSelectedType() {
+  return document.querySelector('input[name="type"]:checked').value;
+}
+
+function setSelectedType(type) {
+  const target = document.querySelector(`input[name="type"][value="${type}"]`);
+  if (target) {
+    target.checked = true;
+  }
+}
+
+function sumTransactions(transactions, type) {
+  return transactions.reduce((sum, transaction) => {
+    if (type && transaction.type !== type) {
+      return sum;
+    }
+
+    return sum + transaction.amount;
+  }, 0);
+}
+
+function showToast(message) {
+  window.clearTimeout(toastTimer);
+  elements.toast.textContent = message;
+  elements.toast.classList.add("visible");
+  toastTimer = window.setTimeout(() => {
+    elements.toast.classList.remove("visible");
+  }, 2200);
+}
+
+function createEmptyState(message, tagName = "div") {
+  const element = document.createElement(tagName);
+  element.className = "empty-state";
+  element.textContent = message;
+  return element;
+}
+
+function getPaymentMethodLabel(value) {
+  return PAYMENT_METHOD_MAP[value] || PAYMENT_METHOD_MAP.cash;
+}
+
+function getSummaryNote({ balance, monthKey, latestDataMonth, transactionCount }) {
+  if (transactionCount === 0) {
+    if (latestDataMonth && latestDataMonth !== monthKey) {
+      return `${formatMonthLabel(latestDataMonth)} 데이터가 가장 최근입니다.`;
+    }
+
+    return "이 월에는 아직 거래가 없습니다.";
+  }
+
+  return balance >= 0 ? "이번 달 잔액이 플러스입니다." : "이번 달 지출이 수입보다 많습니다.";
+}
+
+// [Codex] 월 필터가 비어 있을 때 최근 기록 월로 바로 이동할 수 있게 해 사용자가 직접 월을 다시 찾는 수고를 줄입니다.
+function createLedgerEmptyState() {
+  const latestDataMonth = getLatestDataMonth();
+  const selectedMonth = elements.filterMonth.value;
+  const isMonthScope = elements.filterScope.value === "month";
+
+  if (!isMonthScope || !latestDataMonth || latestDataMonth === selectedMonth || appState.transactions.length === 0) {
+    return createEmptyState("조건에 맞는 거래가 없습니다.");
+  }
+
+  const emptyState = createEmptyState(`${formatMonthLabel(selectedMonth)}에는 거래가 없습니다.`);
+  const hint = document.createElement("p");
+  hint.className = "empty-state-hint";
+  hint.textContent = `가장 최근 거래는 ${formatMonthLabel(latestDataMonth)}에 있습니다.`;
+
+  const actionButton = document.createElement("button");
+  actionButton.type = "button";
+  actionButton.className = "secondary-button empty-state-action";
+  actionButton.textContent = `${formatMonthLabel(latestDataMonth)} 보기`;
+  actionButton.addEventListener("click", () => {
+    setActiveMonth(latestDataMonth);
+    setActiveMobileView("ledger");
+    renderAll();
+  });
+
+  emptyState.append(hint, actionButton);
+  return emptyState;
+}
+
+// [Codex] 상단 달력 아이콘은 연도와 월을 명시적으로 선택하는 시트로 연결해 iPhone에서도 연도 변경이 바로 가능하게 했습니다.
+function openMonthSheet() {
+  populateMonthPickerYears();
+  syncMonthPickerFromSummaryMonth();
+  elements.monthSheet.hidden = false;
+}
+
+function closeMonthSheet() {
+  elements.monthSheet.hidden = true;
+}
+
+function applySelectedMonthFromSheet() {
+  const year = elements.monthPickerYear.value;
+  const month = elements.monthPickerMonth.value;
+  if (!year || !month) {
+    return;
+  }
+
+  setActiveMonth(`${year}-${month}`);
+  renderAll();
+  closeMonthSheet();
+}
+
+function syncMonthPickerFromSummaryMonth() {
+  const [year, month] = getSummaryMonth().split("-");
+  populateMonthPickerYears();
+  elements.monthPickerYear.value = year;
+  elements.monthPickerMonth.value = month;
+}
+
+function populateMonthPickerYears() {
+  const currentYear = Number(getCurrentMonthKey().slice(0, 4));
+  const latestYear = Number((getLatestDataMonth() || getCurrentMonthKey()).slice(0, 4));
+  const selectedYear = Number(getSummaryMonth().slice(0, 4));
+  const startYear = Math.min(currentYear, latestYear, selectedYear) - 5;
+  const endYear = Math.max(currentYear, latestYear, selectedYear) + 5;
+
+  if (elements.monthPickerYear.options.length === endYear - startYear + 1) {
+    return;
+  }
+
+  elements.monthPickerYear.replaceChildren();
+  for (let year = endYear; year >= startYear; year -= 1) {
+    elements.monthPickerYear.appendChild(new Option(`${year}년`, String(year)));
+  }
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("ko-KR", {
+    style: "currency",
+    currency: "KRW",
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+// [Codex] 달력 칸은 통화기호나 접두어 없이 숫자만 보여주도록 별도 포맷을 사용합니다.
+function formatCalendarAmount(value) {
+  return new Intl.NumberFormat("ko-KR", {
+    maximumFractionDigits: 0,
+  }).format(value);
+}
+
+function formatDate(value) {
+  const [year, month, day] = value.split("-");
+  return `${year}.${month}.${day}`;
+}
+
+function formatMonthLabel(value) {
+  const [year, month] = value.split("-");
+  return `${year}년 ${Number(month)}월`;
+}
+
+function normalizeAmount(value) {
+  return Number.parseInt(String(value).replace(/[^\d-]/g, ""), 10);
+}
+
+function sortTransactions(left, right) {
+  return `${right.date}-${right.createdAt}`.localeCompare(`${left.date}-${left.createdAt}`);
+}
+
+function getLocalDateString(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function createId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return `tx-${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
+}
+
+function persistState() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(appState));
+}
+
+function loadState() {
+  const raw = localStorage.getItem(STORAGE_KEY);
+  if (!raw) {
+    return createDefaultState();
+  }
+
+  try {
+    return normalizeState(JSON.parse(raw));
+  } catch (error) {
+    console.error(error);
+    return createDefaultState();
+  }
+}
+
+function createDefaultState() {
+  return {
+    version: APP_STATE_VERSION,
+    budgets: {},
+    transactions: [],
+  };
+}
+
+function normalizeState(value) {
+  const nextState = createDefaultState();
+  const source = value && typeof value === "object" ? value : {};
+  const rawBudgets = source.budgets && typeof source.budgets === "object" ? source.budgets : {};
+  const rawTransactions = Array.isArray(source.transactions) ? source.transactions : [];
+
+  nextState.version = APP_STATE_VERSION;
+  nextState.budgets = Object.fromEntries(
+    Object.entries(rawBudgets)
+      .map(([monthKey, amount]) => [monthKey, Number(amount)])
+      .filter(([monthKey, amount]) => /^\d{4}-\d{2}$/.test(monthKey) && Number.isFinite(amount) && amount > 0)
+  );
+
+  nextState.transactions = rawTransactions
+    .map((transaction) => ({
+      id: String(transaction.id || createId()),
+      type: transaction.type === "income" ? "income" : "expense",
+      amount: Number(transaction.amount),
+      category: String(transaction.category || "").trim(),
+      paymentMethod: String(transaction.paymentMethod || "cash"),
+      date: String(transaction.date || ""),
+      memo: String(transaction.memo || "").trim(),
+      createdAt: String(transaction.createdAt || new Date().toISOString()),
+      updatedAt: String(transaction.updatedAt || new Date().toISOString()),
+    }))
+    .filter((transaction) => {
+      const categories = CATEGORY_MAP[transaction.type];
+      return (
+        Number.isFinite(transaction.amount) &&
+        transaction.amount > 0 &&
+        /^\d{4}-\d{2}-\d{2}$/.test(transaction.date) &&
+        categories.includes(transaction.category) &&
+        Object.prototype.hasOwnProperty.call(PAYMENT_METHOD_MAP, transaction.paymentMethod)
+      );
+    })
+    .sort(sortTransactions);
+
+  return nextState;
+}

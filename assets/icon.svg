@@ -1,0 +1,14 @@
+<!-- [Codex] 홈 화면 아이콘과 파비콘에서 함께 쓸 수 있는 단순 벡터 아이콘입니다. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Money Pocket icon">
+  <defs>
+    <linearGradient id="bg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f5b458" />
+      <stop offset="100%" stop-color="#177d5a" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="132" fill="#fff8ef" />
+  <rect x="40" y="40" width="432" height="432" rx="120" fill="url(#bg)" />
+  <circle cx="256" cy="196" r="68" fill="rgba(255,248,239,0.28)" />
+  <path d="M160 322c0-53.019 42.981-96 96-96s96 42.981 96 96" fill="none" stroke="#fff8ef" stroke-linecap="round" stroke-linejoin="round" stroke-width="42" />
+  <path d="M196 296v-108h44l24 55 24-55h44v108" fill="none" stroke="#15202b" stroke-linecap="round" stroke-linejoin="round" stroke-width="34" />
+</svg>

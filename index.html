@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#f3f4f8" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Money Pocket" />
+    <title>Money Pocket</title>
+    <link rel="manifest" href="manifest.webmanifest" />
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/icon-180.png" />
+    <link rel="stylesheet" href="styles.css" />
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <div class="app-shell">
+      <!-- [Codex] 위플 계열 가계부처럼 상단에 월 선택과 핵심 잔액 요약을 먼저 보여주는 앱형 헤더로 재구성했습니다. -->
+      <header class="app-header">
+        <div class="header-top">
+          <div>
+            <p class="eyebrow">Money Pocket</p>
+            <h1 id="header-month-label">이번 달 가계부</h1>
+          </div>
+          <div class="header-actions">
+            <span class="status-pill" id="connection-state">연결 상태 확인 중</span>
+            <!-- [Codex] 상단 월 조작 버튼은 달력 아이콘 하나로 단순화하고, 별도 연/월 선택 시트에서 직접 고르게 했습니다. -->
+            <button class="icon-button" id="month-picker-button" type="button" aria-label="연도와 월 선택">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 9H4v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2Zm-2-5H6a1 1 0 0 0-1 1v2h15V7a1 1 0 0 0-1-1Z"
+                />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <input id="summary-month" type="month" hidden />
+
+        <section class="headline-card">
+          <p class="eyebrow">Monthly Balance</p>
+          <strong class="headline-value" id="stat-balance">₩0</strong>
+          <p class="headline-note" id="stat-balance-note">이번 달 수입 - 지출</p>
+
+          <div class="headline-metrics">
+            <article class="metric-chip">
+              <span>수입</span>
+              <strong class="income" id="stat-income">₩0</strong>
+            </article>
+            <article class="metric-chip">
+              <span>지출</span>
+              <strong class="expense" id="stat-expense">₩0</strong>
+            </article>
+            <article class="metric-chip">
+              <span>기록 수</span>
+              <strong id="stat-count">0건</strong>
+            </article>
+          </div>
+        </section>
+      </header>
+
+      <main class="content">
+        <div class="section-track" id="section-track">
+          <section class="view-panel is-active" data-view-panel="summary">
+            <!-- [Codex] 홈 탭은 최근 목록 대신 월간 달력으로 바꿔 모든 날짜의 수입/지출 흐름을 한 번에 볼 수 있게 했습니다. -->
+            <section class="surface-card calendar-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Monthly Calendar</p>
+                  <h2>달력 한눈에 보기</h2>
+                </div>
+                <span class="helper-text" id="calendar-month-caption">선택 월 기준</span>
+              </div>
+
+              <div class="calendar-legend">
+                <span class="calendar-legend-item income">수입</span>
+                <span class="calendar-legend-item expense">지출</span>
+              </div>
+
+              <div class="calendar-weekdays" aria-hidden="true">
+                <span>일</span>
+                <span>월</span>
+                <span>화</span>
+                <span>수</span>
+                <span>목</span>
+                <span>금</span>
+                <span>토</span>
+              </div>
+
+              <div id="calendar-grid" class="calendar-grid"></div>
+            </section>
+          </section>
+
+          <section class="view-panel" data-view-panel="entry">
+            <section class="surface-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Quick Entry</p>
+                  <h2>거래 기록</h2>
+                </div>
+                <span class="helper-text" id="form-mode-label">새 거래 추가</span>
+              </div>
+
+              <form id="entry-form" class="entry-form">
+                <fieldset class="type-switch">
+                  <legend>유형</legend>
+                  <label class="type-option">
+                    <input type="radio" name="type" value="expense" checked />
+                    <span>지출</span>
+                  </label>
+                  <label class="type-option">
+                    <input type="radio" name="type" value="income" />
+                    <span>수입</span>
+                  </label>
+                </fieldset>
+
+                <label>
+                  <span>금액</span>
+                  <input
+                    id="amount-input"
+                    name="amount"
+                    type="number"
+                    inputmode="numeric"
+                    min="0"
+                    step="100"
+                    placeholder="예: 12500"
+                    required
+                  />
+                </label>
+
+                <div class="field-row">
+                  <label>
+                    <span>카테고리</span>
+                    <select id="category-input" name="category" required></select>
+                  </label>
+                  <label>
+                    <span>사용 수단</span>
+                    <select id="payment-method-input" name="paymentMethod">
+                      <option value="cash">현금</option>
+                      <option value="credit">신용카드</option>
+                      <option value="debit">체크카드</option>
+                    </select>
+                  </label>
+                </div>
+
+                <div class="field-row">
+                  <label>
+                    <span>날짜</span>
+                    <input id="date-input" name="date" type="date" required />
+                  </label>
+                </div>
+
+                <label>
+                  <span>메모</span>
+                  <input id="memo-input" name="memo" type="text" maxlength="80" placeholder="예: 점심, 택시, 월급" />
+                </label>
+
+                <div class="button-row">
+                  <button class="primary-button" type="submit" id="submit-button">저장</button>
+                  <button class="secondary-button" type="button" id="cancel-edit-button" hidden>수정 취소</button>
+                </div>
+              </form>
+            </section>
+          </section>
+
+          <section class="view-panel" data-view-panel="insights">
+            <section class="surface-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Insights</p>
+                  <h2>지출 통계</h2>
+                </div>
+                <span class="helper-text" id="analysis-month-label">선택 월 기준</span>
+              </div>
+
+              <div class="insight-block">
+                <h3>카테고리 비중</h3>
+                <div id="category-breakdown" class="category-breakdown"></div>
+              </div>
+            </section>
+          </section>
+
+          <section class="view-panel" data-view-panel="ledger">
+            <section class="surface-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Ledger</p>
+                  <h2>거래 내역</h2>
+                </div>
+                <span class="helper-text" id="filter-count">0건 표시 중</span>
+              </div>
+
+              <div class="filter-grid">
+                <label>
+                  <span>범위</span>
+                  <select id="filter-scope">
+                    <option value="month">선택한 월</option>
+                    <option value="all">전체 기간</option>
+                  </select>
+                </label>
+                <label>
+                  <span>월 필터</span>
+                  <input id="filter-month" type="month" />
+                </label>
+                <label>
+                  <span>유형</span>
+                  <select id="filter-type">
+                    <option value="all">전체</option>
+                    <option value="expense">지출</option>
+                    <option value="income">수입</option>
+                  </select>
+                </label>
+                <label>
+                  <span>카테고리</span>
+                  <select id="filter-category">
+                    <option value="all">전체</option>
+                  </select>
+                </label>
+                <label>
+                  <span>사용 수단</span>
+                  <select id="filter-payment-method">
+                    <option value="all">전체</option>
+                    <option value="cash">현금</option>
+                    <option value="credit">신용카드</option>
+                    <option value="debit">체크카드</option>
+                  </select>
+                </label>
+                <label class="search-field">
+                  <span>메모 검색</span>
+                  <input id="search-input" type="search" placeholder="예: 점심, 월급" />
+                </label>
+              </div>
+
+              <div id="transaction-list" class="transaction-list"></div>
+            </section>
+          </section>
+
+          <section class="view-panel" data-view-panel="backup">
+            <!-- [Codex] 설치 안내와 백업을 한 화면에 묶어 앱의 관리 탭처럼 보이도록 정리했습니다. -->
+            <section class="surface-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">App</p>
+                  <h2>앱 관리</h2>
+                </div>
+              </div>
+
+              <div class="install-card">
+                <strong>홈 화면에 추가</strong>
+                <p class="install-hint" id="install-hint">
+                  iPhone Safari의 공유 버튼에서 <strong>홈 화면에 추가</strong>를 선택하면 앱처럼 사용할 수 있습니다.
+                </p>
+                <button class="ghost-button" id="install-button" type="button" hidden>홈 화면에 추가</button>
+              </div>
+            </section>
+
+            <section class="surface-card">
+              <div class="section-heading">
+                <div>
+                  <p class="eyebrow">Backup</p>
+                  <h2>데이터 관리</h2>
+                </div>
+                <span class="helper-text">브라우저 저장소에만 저장됩니다.</span>
+              </div>
+              <div class="backup-actions">
+                <button class="secondary-button" id="export-button" type="button">JSON 내보내기</button>
+                <button class="secondary-button" id="import-button" type="button">JSON 가져오기</button>
+                <button class="danger-button" id="reset-button" type="button">전체 삭제</button>
+              </div>
+              <input id="import-file-input" type="file" accept="application/json" hidden />
+            </section>
+          </section>
+        </div>
+      </main>
+
+      <nav class="tab-bar" id="mobile-viewer-nav" aria-label="화면 이동">
+        <button class="tab-button is-active" type="button" data-view-target="summary">
+          <span class="tab-label">홈</span>
+        </button>
+        <button class="tab-button" type="button" data-view-target="entry">
+          <span class="tab-label">기록</span>
+        </button>
+        <button class="tab-button" type="button" data-view-target="insights">
+          <span class="tab-label">통계</span>
+        </button>
+        <button class="tab-button" type="button" data-view-target="ledger">
+          <span class="tab-label">내역</span>
+        </button>
+        <button class="tab-button" type="button" data-view-target="backup">
+          <span class="tab-label">관리</span>
+        </button>
+      </nav>
+    </div>
+
+    <!-- [Codex] 아이콘 버튼으로 연도와 월을 함께 고를 수 있도록 별도 선택 시트를 추가했습니다. -->
+    <div class="month-sheet" id="month-sheet" hidden>
+      <button class="month-sheet-backdrop" id="month-sheet-backdrop" type="button" aria-label="월 선택 닫기"></button>
+      <section class="month-sheet-card" aria-label="연도와 월 선택">
+        <div class="section-heading">
+          <div>
+            <p class="eyebrow">Month Picker</p>
+            <h2>연도와 월 선택</h2>
+          </div>
+        </div>
+
+        <div class="field-row">
+          <label>
+            <span>연도</span>
+            <select id="month-picker-year"></select>
+          </label>
+          <label>
+            <span>월</span>
+            <select id="month-picker-month">
+              <option value="01">1월</option>
+              <option value="02">2월</option>
+              <option value="03">3월</option>
+              <option value="04">4월</option>
+              <option value="05">5월</option>
+              <option value="06">6월</option>
+              <option value="07">7월</option>
+              <option value="08">8월</option>
+              <option value="09">9월</option>
+              <option value="10">10월</option>
+              <option value="11">11월</option>
+              <option value="12">12월</option>
+            </select>
+          </label>
+        </div>
+
+        <div class="button-row">
+          <button class="secondary-button" id="month-sheet-cancel" type="button">취소</button>
+          <button class="primary-button" id="month-sheet-apply" type="button">적용</button>
+        </div>
+      </section>
+    </div>
+
+    <template id="transaction-item-template">
+      <article class="transaction-item">
+        <div class="transaction-main">
+          <div class="transaction-topline">
+            <strong class="transaction-amount"></strong>
+            <span class="transaction-badge"></span>
+          </div>
+          <div class="transaction-meta">
+            <span class="transaction-date"></span>
+            <span class="transaction-memo"></span>
+          </div>
+        </div>
+        <div class="transaction-actions">
+          <button class="inline-button edit-button" type="button">수정</button>
+          <button class="inline-button delete-button" type="button">삭제</button>
+        </div>
+      </article>
+    </template>
+
+    <template id="category-item-template">
+      <article class="category-row">
+        <div class="category-copy">
+          <strong class="category-name"></strong>
+          <span class="category-value"></span>
+        </div>
+        <div class="category-bar">
+          <div class="category-bar-fill"></div>
+        </div>
+      </article>
+    </template>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  </body>
+</html>
