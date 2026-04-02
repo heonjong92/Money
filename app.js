@@ -235,7 +235,7 @@ function handleFilterTypeChange() {
   renderTransactions();
 }
 
-// [Codex] 달력 날짜 칸은 한 번 탭하면 상세를 열고, 빠른 두 번 탭이나 길게 누르면 같은 날짜로 기록 화면에 바로 진입하게 분리합니다.
+// [Codex] 달력 날짜 칸은 한 번 탭하면 바로 기록으로 가고, 빠른 두 번 탭이나 길게 누르면 상세를 열도록 입력 우선 흐름으로 뒤집었습니다.
 function handleCalendarDayPointerDown(event) {
   const dayButton = event.target.closest(".calendar-day[data-date]");
   if (!dayButton) {
@@ -250,7 +250,7 @@ function handleCalendarDayPointerDown(event) {
   clearCalendarLongPressTimer();
   calendarLongPressTimer = window.setTimeout(() => {
     suppressCalendarClick = true;
-    openEntryForDate(dateKey);
+    toggleCalendarDetailSheet(dateKey);
   }, 420);
 }
 
@@ -292,17 +292,12 @@ function handleCalendarDayClick(event) {
   }
 
   if (isDoubleTap) {
-    openEntryForDate(dateKey);
+    toggleCalendarDetailSheet(dateKey);
     return;
   }
 
   calendarClickTimer = window.setTimeout(() => {
-    if (!elements.calendarDetailSheet.hidden && activeCalendarDate === dateKey) {
-      closeCalendarDetailSheet();
-    } else {
-      openCalendarDetailSheet(dateKey);
-    }
-
+    openEntryForDate(dateKey);
     calendarClickTimer = null;
   }, 180);
 }
@@ -689,8 +684,8 @@ function renderCalendarDetailSheet(dateKey) {
   const balanceTone = balance > 0 ? "positive" : balance < 0 ? "negative" : "neutral";
 
   elements.calendarDetailDate.textContent = formatDate(dateKey);
+  // [Codex] 날짜 상세 상단은 기록 수를 빼고 수입, 지출, 순잔액만 빠르게 읽히도록 더 간략한 요약으로 줄였습니다.
   elements.calendarDetailMetrics.replaceChildren(
-    createCalendarDetailMetric("기록 수", `${transactions.length}건`),
     createCalendarDetailMetric("수입", formatCurrency(income), "income"),
     createCalendarDetailMetric("지출", formatCurrency(expense), "expense")
   );
@@ -1239,6 +1234,16 @@ function openEntryForDate(dateKey) {
   window.setTimeout(() => {
     suppressCalendarClick = false;
   }, 350);
+}
+
+// [Codex] 상세 시트는 같은 날짜를 다시 열면 닫히도록 토글해 두 번 탭과 길게 누름이 같은 동작으로 읽히게 맞춥니다.
+function toggleCalendarDetailSheet(dateKey) {
+  if (!elements.calendarDetailSheet.hidden && activeCalendarDate === dateKey) {
+    closeCalendarDetailSheet();
+    return;
+  }
+
+  openCalendarDetailSheet(dateKey);
 }
 
 function openCalendarDetailSheet(dateKey) {
