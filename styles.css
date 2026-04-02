@@ -2025,18 +2025,18 @@ header .headline-card > .headline-metrics {
 }
 
 header .headline-card .metric-chip {
-  min-width: 3.2rem;
-  padding: 0.16rem 0.24rem;
+  min-width: 3.34rem;
+  padding: 0.18rem 0.26rem;
   border-radius: 1rem;
 }
 
 header .headline-card .metric-chip span {
   margin-bottom: 0.02rem;
-  font-size: 0.48rem;
+  font-size: 0.51rem;
 }
 
 header .headline-card .metric-chip strong {
-  font-size: 0.6rem;
+  font-size: 0.66rem;
   line-height: 1.05;
 }
 
@@ -2051,15 +2051,15 @@ header .headline-card .metric-chip strong {
   }
 
   header .headline-card .metric-chip {
-    min-width: 2.95rem;
-    padding: 0.14rem 0.2rem;
+    min-width: 3.04rem;
+    padding: 0.15rem 0.21rem;
   }
 
   header .headline-card .metric-chip span {
-    font-size: 0.46rem;
+    font-size: 0.48rem;
   }
 
   header .headline-card .metric-chip strong {
-    font-size: 0.56rem;
+    font-size: 0.6rem;
   }
 }
