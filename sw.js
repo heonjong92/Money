@@ -1,7 +1,7 @@
 // [Codex] 정적 자산을 선캐시해 홈 화면 앱이나 오프라인 환경에서도 기본 화면이 열리게 합니다.
 // [Codex] 앱 쉘이 이전 정적 파일을 계속 재사용하지 않도록 캐시 버전을 올려 이번 수정이 즉시 반영되게 합니다.
 // [Codex] 레이아웃을 크게 바꿨기 때문에 새 앱 셸이 즉시 반영되도록 캐시 버전을 갱신합니다.
-const CACHE_NAME = "money-pocket-cache-v10";
+const CACHE_NAME = "money-pocket-cache-v11";
 const ASSETS_TO_CACHE = [
   "./",
   "./index.html",
