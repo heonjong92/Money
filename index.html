@@ -24,7 +24,6 @@
             <h1 id="header-month-label">이번 달 가계부</h1>
           </div>
           <div class="header-actions">
-            <span class="status-pill" id="connection-state">연결 상태 확인 중</span>
             <!-- [Codex] 상단 월 조작 버튼은 달력 아이콘 하나로 단순화하고, 별도 연/월 선택 시트에서 직접 고르게 했습니다. -->
             <button class="icon-button" id="month-picker-button" type="button" aria-label="연도와 월 선택">
               <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -38,21 +37,20 @@
 
         <input id="summary-month" type="month" hidden />
 
+        <!-- [Codex] 상단 요약은 설명 문구를 걷어내고 핵심 금액과 항목만 남겨 첫 화면에서 바로 읽히게 압축합니다. -->
         <section class="headline-card">
-          <p class="eyebrow">Monthly Balance</p>
           <strong class="headline-value" id="stat-balance">₩0</strong>
-          <p class="headline-note" id="stat-balance-note">이번 달 수입 - 지출</p>
 
           <div class="headline-metrics">
             <article class="metric-chip">
               <span>수입</span>
               <strong class="income" id="stat-income">₩0</strong>
             </article>
-            <article class="metric-chip metric-chip-hidden">
+            <article class="metric-chip">
               <span>지출</span>
               <strong class="expense" id="stat-expense">₩0</strong>
             </article>
-            <article class="metric-chip">
+            <article class="metric-chip metric-chip-hidden">
               <span>기록 수</span>
               <strong id="stat-count">0건</strong>
             </article>
@@ -65,12 +63,9 @@
           <section class="view-panel is-active" data-view-panel="summary">
             <!-- [Codex] 홈 탭은 최근 목록 대신 월간 달력으로 바꿔 모든 날짜의 수입/지출 흐름을 한 번에 볼 수 있게 했습니다. -->
             <section class="surface-card calendar-card">
-              <div class="section-heading">
-                <div>
-                  <p class="eyebrow">Monthly Calendar</p>
-                  <h2>달력 한눈에 보기</h2>
-                </div>
-                <span class="helper-text" id="calendar-month-caption">선택 월 기준</span>
+              <!-- [Codex] 홈 달력 머리글은 설명형 제목 대신 현재 월 기준만 남겨 화면 밀도를 높입니다. -->
+              <div class="section-heading section-heading-minimal">
+                <span class="section-caption" id="calendar-month-caption">선택 월 기준</span>
               </div>
 
               <div class="calendar-legend">
@@ -89,6 +84,11 @@
               </div>
 
               <div id="calendar-grid" class="calendar-grid"></div>
+
+              <!-- [Codex] 홈 달력 우하단에는 바로 기록 화면으로 넘어가는 원형 추가 버튼을 둬서 한 번에 입력 흐름으로 진입하게 합니다. -->
+              <button class="calendar-fab" id="summary-quick-entry" type="button" aria-label="바로 기록 추가">
+                <span aria-hidden="true">+</span>
+              </button>
             </section>
           </section>
 
@@ -350,7 +350,7 @@
           <button class="month-scope-option" id="month-scope-all" type="button">전체 기간</button>
         </div>
 
-        <div class="field-row" id="month-picker-fields">
+        <div class="field-row month-picker-legacy" id="month-picker-legacy" hidden>
           <label>
             <span>연도</span>
             <select id="month-picker-year"></select>
@@ -372,6 +372,17 @@
               <option value="12">12월</option>
             </select>
           </label>
+        </div>
+
+        <!-- [Codex] 상단과 내역에서 공통으로 쓰는 월 선택 시트는 연도 이동과 12개월 버튼 그리드로 바꿔 더 달력답게 고를 수 있게 합니다. -->
+        <div class="month-picker-panel" id="month-picker-fields">
+          <div class="month-year-row">
+            <button class="month-year-button" id="month-year-prev" type="button" aria-label="이전 연도">-</button>
+            <strong class="month-year-label" id="month-picker-year-label">2026년</strong>
+            <button class="month-year-button" id="month-year-next" type="button" aria-label="다음 연도">+</button>
+          </div>
+
+          <div class="month-grid" id="month-picker-grid" role="listbox" aria-label="월 선택"></div>
         </div>
 
         <div class="button-row">

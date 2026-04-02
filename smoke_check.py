@@ -20,10 +20,12 @@ REQUIRED_FILES = [
 ]
 REQUIRED_IDS = {
     "summary-month",
+    "summary-quick-entry",
     "entry-form",
     "calendar-grid",
     "calendar-detail-sheet",
     "calendar-detail-list",
+    "month-picker-grid",
     "flow-chart",
     "category-breakdown",
     "ledger-month-button",

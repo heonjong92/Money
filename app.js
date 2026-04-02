@@ -36,6 +36,8 @@ let suppressCalendarClick = false;
 let isLedgerSearchOpen = false;
 let monthSheetTarget = "summary";
 let pendingMonthSheetScope = "month";
+let pendingMonthSheetYear = "";
+let pendingMonthSheetMonth = "";
 
 const elements = {
   mobileViewerNav: document.querySelector("#mobile-viewer-nav"),
@@ -45,12 +47,17 @@ const elements = {
   ledgerMonthLabel: document.querySelector("#ledger-month-label"),
   ledgerSearchButton: document.querySelector("#ledger-search-button"),
   ledgerSearchField: document.querySelector("#ledger-search-field"),
+  summaryQuickEntryButton: document.querySelector("#summary-quick-entry"),
   monthSheet: document.querySelector("#month-sheet"),
   monthSheetBackdrop: document.querySelector("#month-sheet-backdrop"),
   monthScopeSwitch: document.querySelector("#month-scope-switch"),
   monthScopeMonth: document.querySelector("#month-scope-month"),
   monthScopeAll: document.querySelector("#month-scope-all"),
   monthPickerFields: document.querySelector("#month-picker-fields"),
+  monthYearPrev: document.querySelector("#month-year-prev"),
+  monthYearNext: document.querySelector("#month-year-next"),
+  monthPickerYearLabel: document.querySelector("#month-picker-year-label"),
+  monthPickerGrid: document.querySelector("#month-picker-grid"),
   monthPickerYear: document.querySelector("#month-picker-year"),
   monthPickerMonth: document.querySelector("#month-picker-month"),
   monthSheetCancel: document.querySelector("#month-sheet-cancel"),
@@ -64,10 +71,10 @@ const elements = {
   filterPaymentMethod: document.querySelector("#filter-payment-method"),
   searchInput: document.querySelector("#search-input"),
   statBalance: document.querySelector("#stat-balance"),
-  statBalanceNote: document.querySelector("#stat-balance-note"),
   statIncome: document.querySelector("#stat-income"),
   statExpense: document.querySelector("#stat-expense"),
   statCount: document.querySelector("#stat-count"),
+  headlineCard: document.querySelector(".headline-card"),
   calendarMonthCaption: document.querySelector("#calendar-month-caption"),
   calendarGrid: document.querySelector("#calendar-grid"),
   calendarDetailSheet: document.querySelector("#calendar-detail-sheet"),
@@ -98,7 +105,6 @@ const elements = {
   resetButton: document.querySelector("#reset-button"),
   installButton: document.querySelector("#install-button"),
   installHint: document.querySelector("#install-hint"),
-  connectionState: document.querySelector("#connection-state"),
   toast: document.querySelector("#toast"),
   transactionItemTemplate: document.querySelector("#transaction-item-template"),
   categoryItemTemplate: document.querySelector("#category-item-template"),
@@ -118,11 +124,11 @@ function initializeApp() {
   setActiveMonth(initialMonth);
 
   bindEvents();
+  syncCompactHeadline();
   initializeMobileViewer();
   syncEntryCategoryOptions();
   syncFilterCategoryOptions();
   renderAll();
-  updateConnectionState();
   updateInstallHint();
   registerServiceWorker();
 }
@@ -134,11 +140,15 @@ function bindEvents() {
   elements.monthPickerButton.addEventListener("click", () => openMonthSheet("summary"));
   elements.ledgerMonthButton.addEventListener("click", () => openMonthSheet("ledger"));
   elements.ledgerSearchButton.addEventListener("click", toggleLedgerSearch);
+  elements.summaryQuickEntryButton.addEventListener("click", handleSummaryQuickEntry);
   elements.monthSheetBackdrop.addEventListener("click", closeMonthSheet);
   elements.monthSheetCancel.addEventListener("click", closeMonthSheet);
   elements.monthSheetApply.addEventListener("click", applySelectedMonthFromSheet);
   elements.monthScopeMonth.addEventListener("click", () => setMonthSheetScope("month"));
   elements.monthScopeAll.addEventListener("click", () => setMonthSheetScope("all"));
+  elements.monthYearPrev.addEventListener("click", () => shiftMonthPickerYear(-1));
+  elements.monthYearNext.addEventListener("click", () => shiftMonthPickerYear(1));
+  elements.monthPickerGrid.addEventListener("click", handleMonthGridClick);
   elements.calendarGrid.addEventListener("pointerdown", handleCalendarDayPointerDown);
   elements.calendarGrid.addEventListener("pointerup", clearCalendarLongPressTimer);
   elements.calendarGrid.addEventListener("pointerleave", clearCalendarLongPressTimer);
@@ -177,8 +187,12 @@ function bindEvents() {
     updateInstallHint();
   });
 
-  window.addEventListener("online", updateConnectionState);
-  window.addEventListener("offline", updateConnectionState);
+  window.addEventListener("resize", syncCompactHeadline);
+}
+
+// [Codex] Monthly Balance는 모바일 폭에서 한 줄 compact 상태로 전환해 달력 영역을 더 넓게 확보합니다.
+function syncCompactHeadline() {
+  elements.headlineCard.classList.toggle("is-compact", window.innerWidth <= 480);
 }
 
 function handleEntrySubmit(event) {
@@ -292,6 +306,26 @@ function handleCalendarDayClick(event) {
 
     calendarClickTimer = null;
   }, 180);
+}
+
+// [Codex] 홈 달력의 + 버튼은 선택된 날짜가 있으면 그 날짜로, 없으면 현재 월 기준 가장 자연스러운 날짜로 바로 기록 화면을 엽니다.
+function handleSummaryQuickEntry() {
+  openEntryForDate(getQuickEntryDateForSummaryMonth());
+}
+
+function getQuickEntryDateForSummaryMonth() {
+  const summaryMonth = getSummaryMonth();
+  const today = getLocalDateString(new Date());
+
+  if (activeCalendarDate && activeCalendarDate.startsWith(summaryMonth)) {
+    return activeCalendarDate;
+  }
+
+  if (today.startsWith(summaryMonth)) {
+    return today;
+  }
+
+  return `${summaryMonth}-01`;
 }
 
 function handleTransactionAction(event) {
@@ -460,20 +494,12 @@ function renderSummary() {
   const expense = sumTransactions(monthTransactions, "expense");
   const balance = income - expense;
   const transactionCount = monthTransactions.length;
-  const latestDataMonth = getLatestDataMonth();
 
   elements.statBalance.textContent = formatCurrency(balance);
   elements.statIncome.textContent = formatCurrency(income);
   elements.statExpense.textContent = formatCurrency(expense);
   elements.statCount.textContent = `${transactionCount}건`;
   elements.headerMonthLabel.textContent = `${formatMonthLabel(monthKey)} 가계부`;
-  // [Codex] 선택한 월이 비어 있으면 최근 기록이 있는 월을 바로 알려줘서 데이터가 없어진 것으로 오해하지 않게 합니다.
-  elements.statBalanceNote.textContent = getSummaryNote({
-    balance,
-    monthKey,
-    latestDataMonth,
-    transactionCount,
-  });
   elements.calendarMonthCaption.textContent = `${formatMonthLabel(monthKey)} 기준`;
   elements.analysisMonthLabel.textContent = `${formatMonthLabel(monthKey)} 기준`;
   renderCalendarView(monthTransactions, monthKey);
@@ -1071,10 +1097,6 @@ function updateInstallHint() {
     : "브라우저 메뉴의 설치 또는 홈 화면 추가 기능을 사용하세요.";
 }
 
-function updateConnectionState() {
-  elements.connectionState.textContent = navigator.onLine ? "오프라인 캐시 준비 가능" : "오프라인 모드";
-}
-
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     return;
@@ -1308,7 +1330,6 @@ function openMonthSheet(target = "summary") {
   pendingMonthSheetScope = target === "ledger" ? elements.filterScope.value || "month" : "month";
 
   const targetMonth = target === "ledger" ? elements.filterMonth.value || getSummaryMonth() : getSummaryMonth();
-  populateMonthPickerYears(targetMonth);
   syncMonthPickerSelection(targetMonth);
   updateMonthSheetUi();
   elements.monthSheet.hidden = false;
@@ -1318,6 +1339,8 @@ function closeMonthSheet() {
   elements.monthSheet.hidden = true;
   monthSheetTarget = "summary";
   pendingMonthSheetScope = "month";
+  pendingMonthSheetYear = "";
+  pendingMonthSheetMonth = "";
 }
 
 function applySelectedMonthFromSheet() {
@@ -1325,8 +1348,8 @@ function applySelectedMonthFromSheet() {
     elements.filterScope.value = pendingMonthSheetScope;
 
     if (pendingMonthSheetScope === "month") {
-      const year = elements.monthPickerYear.value;
-      const month = elements.monthPickerMonth.value;
+      const year = pendingMonthSheetYear || elements.monthPickerYear.value;
+      const month = pendingMonthSheetMonth || elements.monthPickerMonth.value;
       if (!year || !month) {
         return;
       }
@@ -1339,8 +1362,8 @@ function applySelectedMonthFromSheet() {
     return;
   }
 
-  const year = elements.monthPickerYear.value;
-  const month = elements.monthPickerMonth.value;
+  const year = pendingMonthSheetYear || elements.monthPickerYear.value;
+  const month = pendingMonthSheetMonth || elements.monthPickerMonth.value;
   if (!year || !month) {
     return;
   }
@@ -1363,6 +1386,7 @@ function updateMonthSheetUi() {
   elements.monthPickerFields.hidden = showScopeToggle && !isMonthScope;
   elements.monthScopeMonth.classList.toggle("is-active", isMonthScope);
   elements.monthScopeAll.classList.toggle("is-active", !isMonthScope);
+  elements.monthSheetApply.textContent = showScopeToggle && !isMonthScope ? "전체 기간 보기" : "적용";
 }
 
 function syncMonthPickerSelection(monthKey) {
@@ -1371,6 +1395,9 @@ function syncMonthPickerSelection(monthKey) {
   populateMonthPickerYears(safeMonthKey);
   elements.monthPickerYear.value = year;
   elements.monthPickerMonth.value = month;
+  pendingMonthSheetYear = year;
+  pendingMonthSheetMonth = month;
+  syncMonthPickerGridUi();
 }
 
 function populateMonthPickerYears(referenceMonth = getSummaryMonth()) {
@@ -1384,6 +1411,54 @@ function populateMonthPickerYears(referenceMonth = getSummaryMonth()) {
   for (let year = endYear; year >= startYear; year -= 1) {
     elements.monthPickerYear.appendChild(new Option(`${year}년`, String(year)));
   }
+}
+
+// [Codex] 월 선택 시트는 연도 스텝과 12개월 버튼을 같은 패널에 보여줘서 상단과 내역 필터 모두 같은 달력 스타일로 고르게 합니다.
+function shiftMonthPickerYear(delta) {
+  const baseYear = Number(pendingMonthSheetYear || elements.monthPickerYear.value || getCurrentMonthKey().slice(0, 4));
+  const nextYear = String(baseYear + delta);
+  const nextMonth = pendingMonthSheetMonth || elements.monthPickerMonth.value || "01";
+
+  populateMonthPickerYears(`${nextYear}-${nextMonth}`);
+  pendingMonthSheetYear = nextYear;
+  elements.monthPickerYear.value = nextYear;
+  syncMonthPickerGridUi();
+}
+
+function handleMonthGridClick(event) {
+  const monthButton = event.target.closest("[data-month-value]");
+  if (!monthButton) {
+    return;
+  }
+
+  const nextMonth = monthButton.dataset.monthValue;
+  if (!nextMonth) {
+    return;
+  }
+
+  pendingMonthSheetMonth = nextMonth;
+  elements.monthPickerMonth.value = nextMonth;
+  syncMonthPickerGridUi();
+}
+
+function syncMonthPickerGridUi() {
+  const selectedYear = pendingMonthSheetYear || elements.monthPickerYear.value || getCurrentMonthKey().slice(0, 4);
+  const selectedMonth = pendingMonthSheetMonth || elements.monthPickerMonth.value || "01";
+
+  elements.monthPickerYearLabel.textContent = `${selectedYear}년`;
+  elements.monthPickerGrid.replaceChildren();
+
+  Array.from({ length: 12 }, (_, index) => String(index + 1).padStart(2, "0")).forEach((monthValue) => {
+    const monthButton = document.createElement("button");
+    monthButton.type = "button";
+    monthButton.className = "month-chip";
+    monthButton.dataset.monthValue = monthValue;
+    monthButton.setAttribute("role", "option");
+    monthButton.setAttribute("aria-selected", String(monthValue === selectedMonth));
+    monthButton.textContent = `${Number(monthValue)}월`;
+    monthButton.classList.toggle("is-active", monthValue === selectedMonth);
+    elements.monthPickerGrid.appendChild(monthButton);
+  });
 }
 
 function formatCurrency(value) {

@@ -272,7 +272,7 @@ legend {
 }
 
 .status-pill {
-  display: inline-flex;
+  display: none;
   align-items: center;
   padding: 0.55rem 0.8rem;
   border-radius: 999px;
@@ -282,6 +282,26 @@ legend {
   white-space: nowrap;
   border: 1px solid rgba(216, 176, 191, 0.28);
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+/* [Codex] 홈 달력 헤더는 설명형 제목 대신 현재 월 기준만 남겨 시선이 바로 숫자와 달력으로 내려가게 정리합니다. */
+.section-heading-minimal {
+  justify-content: flex-start;
+  margin-bottom: 0.2rem;
+}
+
+.section-caption {
+  display: inline-flex;
+  align-items: center;
+  min-height: 1.9rem;
+  padding: 0.36rem 0.72rem;
+  border-radius: 999px;
+  background: rgba(255, 247, 250, 0.86);
+  border: 1px solid rgba(220, 189, 202, 0.28);
+  color: var(--accent-strong);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .header-actions {
@@ -355,6 +375,47 @@ legend {
     radial-gradient(circle at top right, rgba(255, 219, 231, 0.72), transparent 34%),
     radial-gradient(circle at left bottom, rgba(247, 233, 239, 0.66), transparent 26%),
     linear-gradient(180deg, rgba(255, 247, 250, 0.94), rgba(255, 255, 255, 0.78) 88%);
+}
+
+/* [Codex] 모바일 compact 상태에서는 Monthly Balance를 한 줄 레이아웃으로 고정해 홈 달력이 더 크게 보이게 합니다. */
+.headline-card.is-compact {
+  display: flex;
+  align-items: center;
+  gap: 0.34rem;
+  padding: 0.38rem 0.48rem;
+}
+
+.headline-card.is-compact > .eyebrow,
+.headline-card.is-compact > .headline-note {
+  display: none;
+}
+
+.headline-card.is-compact > .headline-value {
+  flex: 1;
+  margin: 0;
+  font-size: 1.04rem;
+  white-space: nowrap;
+}
+
+.headline-card.is-compact > .headline-metrics {
+  width: auto;
+  margin: 0;
+  grid-template-columns: repeat(2, auto);
+  gap: 0.22rem;
+  justify-content: end;
+}
+
+.headline-card.is-compact .metric-chip {
+  min-width: 3.7rem;
+  padding: 0.24rem 0.3rem;
+}
+
+.headline-card.is-compact .metric-chip span {
+  font-size: 0.56rem;
+}
+
+.headline-card.is-compact .metric-chip strong {
+  font-size: 0.68rem;
 }
 
 .headline-value {
@@ -479,11 +540,16 @@ legend {
   grid-template-rows: auto auto auto 1fr;
   min-height: 0;
   flex: 1;
+  padding-bottom: 4.2rem;
 }
 
 .calendar-card .section-heading {
   margin-bottom: 0.55rem;
   flex-wrap: wrap;
+}
+
+.calendar-card .section-heading.section-heading-minimal {
+  margin-bottom: 0.45rem;
 }
 
 .month-sheet[hidden] {
@@ -856,6 +922,80 @@ legend {
 .month-scope-switch[hidden],
 #month-picker-fields[hidden] {
   display: none;
+}
+
+/* [Codex] 월 선택 시트는 연도 이동 줄과 12개월 버튼 그리드로 정리해 상단과 내역 아이콘이 같은 스타일의 달력 시트를 공유하게 합니다. */
+.month-picker-panel {
+  display: grid;
+  gap: 0.8rem;
+}
+
+.month-year-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.7rem;
+}
+
+.month-year-button {
+  width: 2.8rem;
+  height: 2.8rem;
+  border-radius: 999px;
+  border: 1px solid rgba(216, 176, 191, 0.28);
+  background: rgba(255, 250, 252, 0.92);
+  color: var(--accent-strong);
+  font-size: 1.1rem;
+  box-shadow: 0 10px 22px rgba(187, 131, 151, 0.08);
+}
+
+.month-year-label {
+  text-align: center;
+  font-size: 1.02rem;
+  letter-spacing: -0.03em;
+}
+
+.month-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 0.6rem;
+}
+
+.month-chip {
+  min-height: 3.05rem;
+  border-radius: 18px;
+  border: 1px solid rgba(216, 176, 191, 0.26);
+  background: rgba(255, 250, 252, 0.9);
+  color: var(--muted);
+  font-weight: 700;
+  box-shadow: 0 10px 22px rgba(187, 131, 151, 0.08);
+}
+
+.month-chip.is-active {
+  color: var(--accent-strong);
+  border-color: rgba(207, 111, 147, 0.34);
+  background: linear-gradient(180deg, rgba(255, 236, 243, 0.98), rgba(255, 250, 252, 0.98));
+}
+
+.calendar-fab {
+  position: absolute;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 3.3rem;
+  height: 3.3rem;
+  border-radius: 999px;
+  color: #fff8fb;
+  background: linear-gradient(135deg, #d5769a, #f0b8ca);
+  box-shadow: 0 18px 28px rgba(207, 111, 147, 0.28);
+}
+
+.calendar-fab span {
+  font-size: 1.55rem;
+  line-height: 1;
+  transform: translateY(-0.05rem);
 }
 
 .month-scope-option.is-active {
@@ -1419,7 +1559,7 @@ legend {
   }
 
   .headline-metrics {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: repeat(2, auto);
     gap: 0.22rem;
   }
 
@@ -1433,6 +1573,44 @@ legend {
 
   .metric-chip strong {
     font-size: 0.7rem;
+  }
+
+  .headline-card {
+    display: flex;
+    align-items: center;
+    gap: 0.28rem;
+    padding: 0.34rem 0.42rem;
+  }
+
+  .headline-card > .eyebrow,
+  .headline-card > .headline-note {
+    display: none;
+  }
+
+  .headline-card > .headline-value {
+    flex: 1;
+    margin: 0;
+    font-size: 0.98rem;
+    white-space: nowrap;
+  }
+
+  .headline-card > .headline-metrics {
+    width: auto;
+    margin: 0;
+    justify-content: end;
+  }
+
+  .headline-card .metric-chip {
+    min-width: 3.45rem;
+    padding: 0.2rem 0.28rem;
+  }
+
+  .headline-card .metric-chip span {
+    font-size: 0.54rem;
+  }
+
+  .headline-card .metric-chip strong {
+    font-size: 0.66rem;
   }
 
   /* [Codex] 기록 탭은 세로 스크롤 대신 한 화면 안에서 끝나도록 카드와 폼 간격, 입력 높이, 버튼 배치를 더 촘촘하게 맞춥니다. */
@@ -1545,6 +1723,23 @@ legend {
   .flow-value {
     font-size: 0.66rem;
   }
+
+  .month-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.48rem;
+  }
+
+  .month-chip {
+    min-height: 2.7rem;
+    font-size: 0.86rem;
+  }
+
+  .calendar-fab {
+    width: 3rem;
+    height: 3rem;
+    right: 0.82rem;
+    bottom: 0.82rem;
+  }
 }
 
 @media (max-width: 480px) {
@@ -1574,6 +1769,46 @@ legend {
 
   .view-panel[data-view-panel="entry"] .helper-text {
     font-size: 0.76rem;
+  }
+
+  .headline-card {
+    display: flex;
+    align-items: center;
+    gap: 0.34rem;
+    padding: 0.38rem 0.48rem;
+  }
+
+  .headline-card > .eyebrow,
+  .headline-card > .headline-note {
+    display: none;
+  }
+
+  .headline-card > .headline-value {
+    flex: 1;
+    margin: 0;
+    font-size: 1.04rem;
+    white-space: nowrap;
+  }
+
+  .headline-card > .headline-metrics {
+    width: auto;
+    margin: 0;
+    grid-template-columns: repeat(2, auto);
+    gap: 0.22rem;
+    justify-content: end;
+  }
+
+  .headline-card .metric-chip {
+    min-width: 3.7rem;
+    padding: 0.24rem 0.3rem;
+  }
+
+  .headline-card .metric-chip span {
+    font-size: 0.56rem;
+  }
+
+  .headline-card .metric-chip strong {
+    font-size: 0.68rem;
   }
 
   .view-panel[data-view-panel="entry"] {
@@ -1671,5 +1906,77 @@ legend {
 
   .flow-bars {
     height: 8rem;
+  }
+
+  .month-chip {
+    min-height: 2.85rem;
+  }
+}
+
+@media (max-width: 480px) {
+  /* [Codex] 홈 상단 요약은 모바일에서 한 줄 압축 레이아웃을 강하게 고정해 달력 영역을 최대한 확보합니다. */
+  header .headline-card {
+    display: flex !important;
+    align-items: center;
+    gap: 0.34rem;
+    padding: 0.38rem 0.48rem;
+  }
+
+  header .headline-card > .eyebrow,
+  header .headline-card > .headline-note {
+    display: none !important;
+  }
+
+  header .headline-card > .headline-value {
+    flex: 1;
+    margin: 0;
+    font-size: 1.04rem;
+    white-space: nowrap;
+  }
+
+  header .headline-card > .headline-metrics {
+    display: grid;
+    width: auto;
+    margin: 0;
+    grid-template-columns: repeat(2, auto);
+    gap: 0.22rem;
+    justify-content: end;
+  }
+
+  header .headline-card .metric-chip {
+    min-width: 3.7rem;
+    padding: 0.24rem 0.3rem;
+  }
+
+  header .headline-card .metric-chip span {
+    font-size: 0.56rem;
+  }
+
+  header .headline-card .metric-chip strong {
+    font-size: 0.68rem;
+  }
+}
+
+@media (max-width: 420px) {
+  header .headline-card {
+    gap: 0.28rem;
+    padding: 0.34rem 0.42rem;
+  }
+
+  header .headline-card > .headline-value {
+    font-size: 0.98rem;
+  }
+
+  header .headline-card .metric-chip {
+    min-width: 3.45rem;
+    padding: 0.2rem 0.28rem;
+  }
+
+  header .headline-card .metric-chip span {
+    font-size: 0.54rem;
+  }
+
+  header .headline-card .metric-chip strong {
+    font-size: 0.66rem;
   }
 }
