@@ -29,10 +29,8 @@ let toastTimer = null;
 let activeMobileView = "summary";
 let activeCalendarDate = "";
 let calendarClickTimer = null;
-let calendarLongPressTimer = null;
 let lastCalendarTapDate = "";
 let lastCalendarTapAt = 0;
-let suppressCalendarClick = false;
 let isLedgerSearchOpen = false;
 let monthSheetTarget = "summary";
 let pendingMonthSheetScope = "month";
@@ -148,10 +146,6 @@ function bindEvents() {
   elements.monthYearPrev.addEventListener("click", () => shiftMonthPickerYear(-1));
   elements.monthYearNext.addEventListener("click", () => shiftMonthPickerYear(1));
   elements.monthPickerGrid.addEventListener("click", handleMonthGridClick);
-  elements.calendarGrid.addEventListener("pointerdown", handleCalendarDayPointerDown);
-  elements.calendarGrid.addEventListener("pointerup", clearCalendarLongPressTimer);
-  elements.calendarGrid.addEventListener("pointerleave", clearCalendarLongPressTimer);
-  elements.calendarGrid.addEventListener("pointercancel", clearCalendarLongPressTimer);
   elements.calendarGrid.addEventListener("click", handleCalendarDayClick);
   elements.calendarDetailBackdrop.addEventListener("click", () => closeCalendarDetailSheet());
   elements.calendarDetailClose.addEventListener("click", () => closeCalendarDetailSheet());
@@ -235,34 +229,7 @@ function handleFilterTypeChange() {
   renderTransactions();
 }
 
-// [Codex] 달력 날짜 칸은 한 번 탭하면 바로 기록으로 가고, 빠른 두 번 탭이나 길게 누르면 상세를 열도록 입력 우선 흐름으로 뒤집었습니다.
-function handleCalendarDayPointerDown(event) {
-  const dayButton = event.target.closest(".calendar-day[data-date]");
-  if (!dayButton) {
-    return;
-  }
-
-  const dateKey = dayButton.dataset.date;
-  if (!dateKey) {
-    return;
-  }
-
-  clearCalendarLongPressTimer();
-  calendarLongPressTimer = window.setTimeout(() => {
-    suppressCalendarClick = true;
-    toggleCalendarDetailSheet(dateKey);
-  }, 420);
-}
-
-function clearCalendarLongPressTimer() {
-  if (!calendarLongPressTimer) {
-    return;
-  }
-
-  window.clearTimeout(calendarLongPressTimer);
-  calendarLongPressTimer = null;
-}
-
+// [Codex] 달력 날짜 칸은 한 번 탭하면 바로 기록으로 가고, 두 번 탭할 때만 상세를 열도록 제스처를 단순화했습니다.
 function handleCalendarDayClick(event) {
   const dayButton = event.target.closest(".calendar-day[data-date]");
   if (!dayButton) {
@@ -271,13 +238,6 @@ function handleCalendarDayClick(event) {
 
   const dateKey = dayButton.dataset.date;
   if (!dateKey) {
-    return;
-  }
-
-  clearCalendarLongPressTimer();
-
-  if (suppressCalendarClick) {
-    suppressCalendarClick = false;
     return;
   }
 
@@ -1223,7 +1183,6 @@ function openEntryForDate(dateKey) {
     calendarClickTimer = null;
   }
 
-  clearCalendarLongPressTimer();
   lastCalendarTapDate = "";
   lastCalendarTapAt = 0;
   resetEntryForm();
@@ -1231,9 +1190,6 @@ function openEntryForDate(dateKey) {
   closeCalendarDetailSheet({ rerender: false });
   setActiveMobileView("entry");
   getMobileViewPanel("entry")?.scrollTo({ top: 0, behavior: "smooth" });
-  window.setTimeout(() => {
-    suppressCalendarClick = false;
-  }, 350);
 }
 
 // [Codex] 상세 시트는 같은 날짜를 다시 열면 닫히도록 토글해 두 번 탭과 길게 누름이 같은 동작으로 읽히게 맞춥니다.
