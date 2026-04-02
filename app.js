@@ -28,13 +28,29 @@ let installPromptEvent = null;
 let toastTimer = null;
 let activeMobileView = "summary";
 let activeCalendarDate = "";
+let calendarClickTimer = null;
+let calendarLongPressTimer = null;
+let lastCalendarTapDate = "";
+let lastCalendarTapAt = 0;
+let suppressCalendarClick = false;
+let isLedgerSearchOpen = false;
+let monthSheetTarget = "summary";
+let pendingMonthSheetScope = "month";
 
 const elements = {
   mobileViewerNav: document.querySelector("#mobile-viewer-nav"),
   sectionTrack: document.querySelector("#section-track"),
   monthPickerButton: document.querySelector("#month-picker-button"),
+  ledgerMonthButton: document.querySelector("#ledger-month-button"),
+  ledgerMonthLabel: document.querySelector("#ledger-month-label"),
+  ledgerSearchButton: document.querySelector("#ledger-search-button"),
+  ledgerSearchField: document.querySelector("#ledger-search-field"),
   monthSheet: document.querySelector("#month-sheet"),
   monthSheetBackdrop: document.querySelector("#month-sheet-backdrop"),
+  monthScopeSwitch: document.querySelector("#month-scope-switch"),
+  monthScopeMonth: document.querySelector("#month-scope-month"),
+  monthScopeAll: document.querySelector("#month-scope-all"),
+  monthPickerFields: document.querySelector("#month-picker-fields"),
   monthPickerYear: document.querySelector("#month-picker-year"),
   monthPickerMonth: document.querySelector("#month-picker-month"),
   monthSheetCancel: document.querySelector("#month-sheet-cancel"),
@@ -71,6 +87,8 @@ const elements = {
   cancelEditButton: document.querySelector("#cancel-edit-button"),
   formModeLabel: document.querySelector("#form-mode-label"),
   analysisMonthLabel: document.querySelector("#analysis-month-label"),
+  flowChart: document.querySelector("#flow-chart"),
+  flowChartCaption: document.querySelector("#flow-chart-caption"),
   categoryBreakdown: document.querySelector("#category-breakdown"),
   transactionList: document.querySelector("#transaction-list"),
   filterCount: document.querySelector("#filter-count"),
@@ -95,6 +113,7 @@ function initializeApp() {
   const initialMonth = getLatestDataMonth() || getCurrentMonthKey();
 
   elements.dateInput.value = today;
+  elements.searchInput.placeholder = "예: 점심, 송금";
   // [Codex] 거래나 예산이 있는 가장 최근 월을 기본으로 열어 월이 바뀐 날에도 기록이 사라진 것처럼 보이지 않게 합니다.
   setActiveMonth(initialMonth);
 
@@ -112,10 +131,18 @@ function bindEvents() {
   document.addEventListener("click", handleViewTargetClick);
   elements.entryForm.addEventListener("submit", handleEntrySubmit);
   elements.cancelEditButton.addEventListener("click", resetEntryForm);
-  elements.monthPickerButton.addEventListener("click", openMonthSheet);
+  elements.monthPickerButton.addEventListener("click", () => openMonthSheet("summary"));
+  elements.ledgerMonthButton.addEventListener("click", () => openMonthSheet("ledger"));
+  elements.ledgerSearchButton.addEventListener("click", toggleLedgerSearch);
   elements.monthSheetBackdrop.addEventListener("click", closeMonthSheet);
   elements.monthSheetCancel.addEventListener("click", closeMonthSheet);
   elements.monthSheetApply.addEventListener("click", applySelectedMonthFromSheet);
+  elements.monthScopeMonth.addEventListener("click", () => setMonthSheetScope("month"));
+  elements.monthScopeAll.addEventListener("click", () => setMonthSheetScope("all"));
+  elements.calendarGrid.addEventListener("pointerdown", handleCalendarDayPointerDown);
+  elements.calendarGrid.addEventListener("pointerup", clearCalendarLongPressTimer);
+  elements.calendarGrid.addEventListener("pointerleave", clearCalendarLongPressTimer);
+  elements.calendarGrid.addEventListener("pointercancel", clearCalendarLongPressTimer);
   elements.calendarGrid.addEventListener("click", handleCalendarDayClick);
   elements.calendarDetailBackdrop.addEventListener("click", () => closeCalendarDetailSheet());
   elements.calendarDetailClose.addEventListener("click", () => closeCalendarDetailSheet());
@@ -195,7 +222,34 @@ function handleFilterTypeChange() {
   renderTransactions();
 }
 
-// [Codex] 홈 달력 날짜 셀을 누르면 같은 화면 안에서 그날 거래를 하단 시트로 바로 열어 이동 흐름을 줄입니다.
+// [Codex] 달력 날짜 칸은 한 번 탭하면 상세를 열고, 빠른 두 번 탭이나 길게 누르면 같은 날짜로 기록 화면에 바로 진입하게 분리합니다.
+function handleCalendarDayPointerDown(event) {
+  const dayButton = event.target.closest(".calendar-day[data-date]");
+  if (!dayButton) {
+    return;
+  }
+
+  const dateKey = dayButton.dataset.date;
+  if (!dateKey) {
+    return;
+  }
+
+  clearCalendarLongPressTimer();
+  calendarLongPressTimer = window.setTimeout(() => {
+    suppressCalendarClick = true;
+    openEntryForDate(dateKey);
+  }, 420);
+}
+
+function clearCalendarLongPressTimer() {
+  if (!calendarLongPressTimer) {
+    return;
+  }
+
+  window.clearTimeout(calendarLongPressTimer);
+  calendarLongPressTimer = null;
+}
+
 function handleCalendarDayClick(event) {
   const dayButton = event.target.closest(".calendar-day[data-date]");
   if (!dayButton) {
@@ -207,12 +261,37 @@ function handleCalendarDayClick(event) {
     return;
   }
 
-  if (!elements.calendarDetailSheet.hidden && activeCalendarDate === dateKey) {
-    closeCalendarDetailSheet();
+  clearCalendarLongPressTimer();
+
+  if (suppressCalendarClick) {
+    suppressCalendarClick = false;
     return;
   }
 
-  openCalendarDetailSheet(dateKey);
+  const now = Date.now();
+  const isDoubleTap = lastCalendarTapDate === dateKey && now - lastCalendarTapAt < 260;
+  lastCalendarTapDate = dateKey;
+  lastCalendarTapAt = now;
+
+  if (calendarClickTimer) {
+    window.clearTimeout(calendarClickTimer);
+    calendarClickTimer = null;
+  }
+
+  if (isDoubleTap) {
+    openEntryForDate(dateKey);
+    return;
+  }
+
+  calendarClickTimer = window.setTimeout(() => {
+    if (!elements.calendarDetailSheet.hidden && activeCalendarDate === dateKey) {
+      closeCalendarDetailSheet();
+    } else {
+      openCalendarDetailSheet(dateKey);
+    }
+
+    calendarClickTimer = null;
+  }, 180);
 }
 
 function handleTransactionAction(event) {
@@ -334,8 +413,10 @@ function renderAll() {
 
 function initializeMobileViewer() {
   // [Codex] 하단 탭바와 본문 패널을 직접 토글하는 방식으로 화면 전환 구조를 단순화했습니다.
+  isLedgerSearchOpen = Boolean(elements.searchInput.value.trim());
   setActiveMobileView(activeMobileView);
-  syncMonthPickerFromSummaryMonth();
+  syncMonthPickerSelection(getSummaryMonth());
+  updateLedgerFilterUi();
 }
 
 function handleViewTargetClick(event) {
@@ -396,6 +477,7 @@ function renderSummary() {
   elements.calendarMonthCaption.textContent = `${formatMonthLabel(monthKey)} 기준`;
   elements.analysisMonthLabel.textContent = `${formatMonthLabel(monthKey)} 기준`;
   renderCalendarView(monthTransactions, monthKey);
+  renderFlowChart(monthTransactions, monthKey);
   renderCategoryBreakdown(monthTransactions);
 
   // [Codex] 날짜 상세 시트가 열린 상태에서는 월 이동이나 데이터 변경 뒤에도 같은 날짜 내용을 즉시 다시 맞춰줍니다.
@@ -437,6 +519,76 @@ function renderCategoryBreakdown(monthTransactions) {
 }
 
 // [Codex] 홈 달력은 날짜별 수입/지출 합계를 같은 칸에 넣어 월간 흐름을 한 번에 읽을 수 있게 구성했습니다.
+// [Codex] 통계 탭에는 현재 월을 주차 단위로 묶은 수입·지출 막대를 그려서 숫자 표기와 함께 흐름을 한 번에 읽게 합니다.
+function renderFlowChart(monthTransactions, monthKey) {
+  const weeklyFlow = buildWeeklyFlow(monthTransactions, monthKey);
+  const maxAmount = weeklyFlow.reduce((maxValue, week) => Math.max(maxValue, week.income, week.expense), 0);
+
+  elements.flowChartCaption.textContent = `${formatMonthLabel(monthKey)} 주차별 흐름`;
+  elements.flowChart.replaceChildren();
+
+  if (maxAmount === 0) {
+    elements.flowChart.appendChild(createEmptyState("아직 이번 달 흐름을 그릴 거래가 없습니다."));
+    return;
+  }
+
+  weeklyFlow.forEach((week) => {
+    const column = document.createElement("article");
+    column.className = "flow-column";
+    column.setAttribute(
+      "aria-label",
+      `${week.label} 수입 ${formatCurrency(week.income)}, 지출 ${formatCurrency(week.expense)}`
+    );
+
+    const bars = document.createElement("div");
+    bars.className = "flow-bars";
+
+    const incomeBar = document.createElement("span");
+    incomeBar.className = "flow-bar income";
+    incomeBar.style.height = `${Math.max((week.income / maxAmount) * 100, week.income > 0 ? 10 : 0)}%`;
+
+    const expenseBar = document.createElement("span");
+    expenseBar.className = "flow-bar expense";
+    expenseBar.style.height = `${Math.max((week.expense / maxAmount) * 100, week.expense > 0 ? 10 : 0)}%`;
+
+    const meta = document.createElement("div");
+    meta.className = "flow-meta";
+
+    const label = document.createElement("strong");
+    label.className = "flow-label";
+    label.textContent = week.label;
+
+    const value = document.createElement("span");
+    value.className = "flow-value";
+    value.textContent = `${formatCalendarAmount(week.income)} / ${formatCalendarAmount(week.expense)}`;
+
+    bars.append(incomeBar, expenseBar);
+    meta.append(label, value);
+    column.append(bars, meta);
+    elements.flowChart.appendChild(column);
+  });
+}
+
+function buildWeeklyFlow(monthTransactions, monthKey) {
+  const [year, month] = monthKey.split("-").map(Number);
+  const firstWeekday = new Date(year, month - 1, 1).getDay();
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const weekCount = Math.ceil((firstWeekday + daysInMonth) / 7);
+  const weeklyFlow = Array.from({ length: weekCount }, (_, index) => ({
+    label: `${index + 1}주`,
+    income: 0,
+    expense: 0,
+  }));
+
+  monthTransactions.forEach((transaction) => {
+    const day = Number(transaction.date.slice(-2));
+    const weekIndex = Math.floor((firstWeekday + day - 1) / 7);
+    weeklyFlow[weekIndex][transaction.type] += transaction.amount;
+  });
+
+  return weeklyFlow;
+}
+
 function renderCalendarView(monthTransactions, monthKey) {
   elements.calendarGrid.replaceChildren();
 
@@ -511,6 +663,7 @@ function renderCalendarDetailSheet(dateKey) {
   const income = sumTransactions(transactions, "income");
   const expense = sumTransactions(transactions, "expense");
   const balance = income - expense;
+  const balanceTone = balance > 0 ? "positive" : balance < 0 ? "negative" : "neutral";
 
   elements.calendarDetailDate.textContent = formatDate(dateKey);
   elements.calendarDetailMetrics.replaceChildren(
@@ -518,8 +671,9 @@ function renderCalendarDetailSheet(dateKey) {
     createCalendarDetailMetric("수입", formatCurrency(income), "income"),
     createCalendarDetailMetric("지출", formatCurrency(expense), "expense")
   );
+  elements.calendarDetailNote.className = `calendar-detail-note is-${balanceTone}`;
   elements.calendarDetailNote.textContent = transactions.length
-    ? `순잔액 ${formatCurrency(balance)}`
+    ? `순잔액 ${formatSignedCurrency(balance)}`
     : "선택한 날짜에 아직 거래가 없습니다.";
 
   elements.calendarDetailList.replaceChildren();
@@ -528,8 +682,8 @@ function renderCalendarDetailSheet(dateKey) {
     return;
   }
 
-  transactions.forEach((transaction) => {
-    elements.calendarDetailList.appendChild(createTransactionItemElement(transaction, { showDate: false }));
+  buildCategoryGroups(transactions).forEach((group) => {
+    elements.calendarDetailList.appendChild(createCalendarCategoryGroup(group));
   });
 }
 
@@ -548,6 +702,65 @@ function createCalendarDetailMetric(label, value, toneClass = "") {
 
   card.append(labelElement, valueElement);
   return card;
+}
+
+// [Codex] 날짜 상세 목록은 카테고리별로 묶어 같은 소비 맥락을 한 번에 확인하게 하고, 각 묶음 합계도 바로 보여줍니다.
+function createCalendarCategoryGroup(group) {
+  const section = document.createElement("section");
+  section.className = "calendar-category-group";
+
+  const header = document.createElement("div");
+  header.className = "calendar-category-header";
+
+  const title = document.createElement("strong");
+  title.textContent = group.category;
+
+  const meta = document.createElement("span");
+  meta.className = `calendar-category-total ${group.total > 0 ? "income" : group.total < 0 ? "expense" : ""}`.trim();
+  meta.textContent = `${group.items.length}건 · ${formatSignedCurrency(group.total)}`;
+
+  const body = document.createElement("div");
+  body.className = "calendar-category-body";
+
+  group.items.forEach((transaction) => {
+    body.appendChild(createTransactionItemElement(transaction, { showDate: false }));
+  });
+
+  header.append(title, meta);
+  section.append(header, body);
+  return section;
+}
+
+function buildCategoryGroups(transactions) {
+  const grouped = transactions.reduce((accumulator, transaction) => {
+    const groupKey = transaction.category;
+    if (!accumulator.has(groupKey)) {
+      accumulator.set(groupKey, {
+        category: groupKey,
+        items: [],
+        total: 0,
+      });
+    }
+
+    const group = accumulator.get(groupKey);
+    group.items.push(transaction);
+    group.total += transaction.type === "income" ? transaction.amount : -transaction.amount;
+    return accumulator;
+  }, new Map());
+
+  return [...grouped.values()].sort((left, right) => Math.abs(right.total) - Math.abs(left.total));
+}
+
+function formatSignedCurrency(value) {
+  if (value > 0) {
+    return `+ ${formatCurrency(value)}`;
+  }
+
+  if (value < 0) {
+    return `- ${formatCurrency(Math.abs(value))}`;
+  }
+
+  return formatCurrency(0);
 }
 
 function createTransactionItemElement(transaction, options = {}) {
@@ -577,9 +790,44 @@ function createTransactionItemElement(transaction, options = {}) {
   return item;
 }
 
+// [Codex] 내역 도구막대는 달력 버튼 텍스트, 검색창 펼침 상태, 검색 활성 여부를 같이 갱신해 현재 필터 조건을 바로 읽게 합니다.
+function updateLedgerFilterUi() {
+  const isMonthScope = elements.filterScope.value !== "all";
+  const monthKey = elements.filterMonth.value || getSummaryMonth();
+  const isSearchActive = isLedgerSearchOpen || Boolean(elements.searchInput.value.trim());
+
+  elements.ledgerMonthLabel.textContent = isMonthScope ? formatMonthLabel(monthKey) : "전체 기간";
+  elements.ledgerMonthButton.setAttribute(
+    "aria-label",
+    isMonthScope ? `${formatMonthLabel(monthKey)} 내역 필터` : "전체 기간 내역 필터"
+  );
+  elements.ledgerSearchField.hidden = !isLedgerSearchOpen;
+  elements.ledgerSearchButton.classList.toggle("is-active", isSearchActive);
+  elements.ledgerMonthButton.classList.toggle("is-active", !isMonthScope);
+}
+
+function toggleLedgerSearch() {
+  if (isLedgerSearchOpen) {
+    if (elements.searchInput.value.trim()) {
+      elements.searchInput.value = "";
+      renderTransactions();
+    }
+    isLedgerSearchOpen = false;
+    updateLedgerFilterUi();
+    return;
+  }
+
+  isLedgerSearchOpen = true;
+  updateLedgerFilterUi();
+  window.setTimeout(() => {
+    elements.searchInput.focus();
+  }, 0);
+}
+
 function renderTransactions() {
   const transactions = getFilteredTransactions();
   elements.transactionList.replaceChildren();
+  updateLedgerFilterUi();
   elements.filterCount.textContent = `${transactions.length}건 표시 중`;
 
   if (transactions.length === 0) {
@@ -868,7 +1116,7 @@ function setActiveMonth(monthKey) {
   const nextMonthKey = monthKey || getLatestDataMonth() || getCurrentMonthKey();
   elements.summaryMonth.value = nextMonthKey;
   elements.filterMonth.value = nextMonthKey;
-  syncMonthPickerFromSummaryMonth();
+  syncMonthPickerSelection(nextMonthKey);
 }
 
 function getSelectedType() {
@@ -955,6 +1203,25 @@ function createLedgerEmptyState() {
 
 // [Codex] 상단 달력 아이콘은 연도와 월을 명시적으로 선택하는 시트로 연결해 iPhone에서도 연도 변경이 바로 가능하게 했습니다.
 // [Codex] 선택한 날짜를 별도 하단 시트로 띄워 홈 달력 안에서 바로 확인하고, 닫으면 선택 강조도 함께 정리합니다.
+function openEntryForDate(dateKey) {
+  if (calendarClickTimer) {
+    window.clearTimeout(calendarClickTimer);
+    calendarClickTimer = null;
+  }
+
+  clearCalendarLongPressTimer();
+  lastCalendarTapDate = "";
+  lastCalendarTapAt = 0;
+  resetEntryForm();
+  elements.dateInput.value = dateKey;
+  closeCalendarDetailSheet({ rerender: false });
+  setActiveMobileView("entry");
+  getMobileViewPanel("entry")?.scrollTo({ top: 0, behavior: "smooth" });
+  window.setTimeout(() => {
+    suppressCalendarClick = false;
+  }, 350);
+}
+
 function openCalendarDetailSheet(dateKey) {
   activeCalendarDate = dateKey;
   elements.calendarDetailSheet.hidden = false;
@@ -963,6 +1230,11 @@ function openCalendarDetailSheet(dateKey) {
 
 function closeCalendarDetailSheet(options = {}) {
   const { rerender = true } = options;
+  if (calendarClickTimer) {
+    window.clearTimeout(calendarClickTimer);
+    calendarClickTimer = null;
+  }
+
   elements.calendarDetailSheet.hidden = true;
   activeCalendarDate = "";
   elements.calendarGrid.querySelectorAll(".calendar-day.is-selected").forEach((dayCell) => {
@@ -1023,6 +1295,90 @@ function populateMonthPickerYears() {
   if (elements.monthPickerYear.options.length === endYear - startYear + 1) {
     return;
   }
+
+  elements.monthPickerYear.replaceChildren();
+  for (let year = endYear; year >= startYear; year -= 1) {
+    elements.monthPickerYear.appendChild(new Option(`${year}년`, String(year)));
+  }
+}
+
+// [Codex] 월 선택 시트는 상단 요약 월 변경과 내역 기간 필터를 같은 컴포넌트로 재사용하되, 내역에서는 전체 기간 토글까지 함께 다룹니다.
+function openMonthSheet(target = "summary") {
+  monthSheetTarget = target;
+  pendingMonthSheetScope = target === "ledger" ? elements.filterScope.value || "month" : "month";
+
+  const targetMonth = target === "ledger" ? elements.filterMonth.value || getSummaryMonth() : getSummaryMonth();
+  populateMonthPickerYears(targetMonth);
+  syncMonthPickerSelection(targetMonth);
+  updateMonthSheetUi();
+  elements.monthSheet.hidden = false;
+}
+
+function closeMonthSheet() {
+  elements.monthSheet.hidden = true;
+  monthSheetTarget = "summary";
+  pendingMonthSheetScope = "month";
+}
+
+function applySelectedMonthFromSheet() {
+  if (monthSheetTarget === "ledger") {
+    elements.filterScope.value = pendingMonthSheetScope;
+
+    if (pendingMonthSheetScope === "month") {
+      const year = elements.monthPickerYear.value;
+      const month = elements.monthPickerMonth.value;
+      if (!year || !month) {
+        return;
+      }
+
+      elements.filterMonth.value = `${year}-${month}`;
+    }
+
+    renderTransactions();
+    closeMonthSheet();
+    return;
+  }
+
+  const year = elements.monthPickerYear.value;
+  const month = elements.monthPickerMonth.value;
+  if (!year || !month) {
+    return;
+  }
+
+  setActiveMonth(`${year}-${month}`);
+  renderAll();
+  closeMonthSheet();
+}
+
+function setMonthSheetScope(scope) {
+  pendingMonthSheetScope = scope === "all" ? "all" : "month";
+  updateMonthSheetUi();
+}
+
+function updateMonthSheetUi() {
+  const showScopeToggle = monthSheetTarget === "ledger";
+  const isMonthScope = pendingMonthSheetScope === "month";
+
+  elements.monthScopeSwitch.hidden = !showScopeToggle;
+  elements.monthPickerFields.hidden = showScopeToggle && !isMonthScope;
+  elements.monthScopeMonth.classList.toggle("is-active", isMonthScope);
+  elements.monthScopeAll.classList.toggle("is-active", !isMonthScope);
+}
+
+function syncMonthPickerSelection(monthKey) {
+  const safeMonthKey = monthKey || getSummaryMonth();
+  const [year, month] = safeMonthKey.split("-");
+  populateMonthPickerYears(safeMonthKey);
+  elements.monthPickerYear.value = year;
+  elements.monthPickerMonth.value = month;
+}
+
+function populateMonthPickerYears(referenceMonth = getSummaryMonth()) {
+  const currentYear = Number(getCurrentMonthKey().slice(0, 4));
+  const latestYear = Number((getLatestDataMonth() || getCurrentMonthKey()).slice(0, 4));
+  const selectedYear = Number((referenceMonth || getSummaryMonth()).slice(0, 4));
+  const startYear = Math.min(currentYear, latestYear, selectedYear) - 5;
+  const endYear = Math.max(currentYear, latestYear, selectedYear) + 5;
 
   elements.monthPickerYear.replaceChildren();
   for (let year = endYear; year >= startYear; year -= 1) {

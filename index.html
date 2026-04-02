@@ -115,21 +115,21 @@
                   </label>
                 </fieldset>
 
-                <label>
+                <label class="entry-amount-field">
                   <span>금액</span>
                   <input
                     id="amount-input"
                     name="amount"
                     type="number"
                     inputmode="numeric"
-                    min="0"
-                    step="100"
+                    min="1"
+                    step="1"
                     placeholder="예: 12500"
                     required
                   />
                 </label>
 
-                <div class="field-row">
+                <div class="field-row entry-meta-row">
                   <label>
                     <span>카테고리</span>
                     <select id="category-input" name="category" required></select>
@@ -144,19 +144,19 @@
                   </label>
                 </div>
 
-                <div class="field-row">
+                <div class="field-row entry-date-row">
                   <label>
                     <span>날짜</span>
                     <input id="date-input" name="date" type="date" required />
                   </label>
                 </div>
 
-                <label>
+                <label class="entry-memo-field">
                   <span>메모</span>
                   <input id="memo-input" name="memo" type="text" maxlength="80" placeholder="예: 점심, 택시, 월급" />
                 </label>
 
-                <div class="button-row">
+                <div class="button-row entry-actions">
                   <button class="primary-button" type="submit" id="submit-button">저장</button>
                   <button class="secondary-button" type="button" id="cancel-edit-button" hidden>수정 취소</button>
                 </div>
@@ -176,6 +176,24 @@
 
               <div class="insight-block">
                 <h3>카테고리 비중</h3>
+                <div class="section-heading insight-heading">
+                  <div>
+                    <h3>월 흐름</h3>
+                  </div>
+                  <span class="helper-text" id="flow-chart-caption">선택 월 주차별 흐름</span>
+                </div>
+
+                <div class="flow-chart-legend" aria-hidden="true">
+                  <span class="calendar-legend-item income">수입</span>
+                  <span class="calendar-legend-item expense">지출</span>
+                </div>
+
+                <div id="flow-chart" class="flow-chart"></div>
+              </div>
+
+              <!-- [Codex] 월 흐름 막대를 먼저 보여준 뒤 카테고리 비중을 이어서 읽을 수 있게 통계 순서를 정리합니다. -->
+              <div class="insight-block">
+                <h3>카테고리 비중</h3>
                 <div id="category-breakdown" class="category-breakdown"></div>
               </div>
             </section>
@@ -191,21 +209,43 @@
                 <span class="helper-text" id="filter-count">0건 표시 중</span>
               </div>
 
-              <div class="filter-grid">
-                <label>
+              <!-- [Codex] 달력 버튼으로 기간 필터를 열고, 검색 버튼으로 메모 검색창만 접어서 쓰도록 내역 상단 도구막대를 분리합니다. -->
+              <div class="ledger-toolbar">
+                <div class="ledger-toolbar-actions">
+                  <button class="filter-icon-button filter-icon-button-wide" id="ledger-month-button" type="button" aria-label="내역 기간 선택">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M7 2a1 1 0 0 1 1 1v1h8V3a1 1 0 1 1 2 0v1h1a3 3 0 0 1 3 3v11a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V7a3 3 0 0 1 3-3h1V3a1 1 0 0 1 1-1Zm13 9H4v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2Zm-2-5H6a1 1 0 0 0-1 1v2h15V7a1 1 0 0 0-1-1Z"
+                      />
+                    </svg>
+                    <span id="ledger-month-label">선택 월</span>
+                  </button>
+
+                  <button class="filter-icon-button" id="ledger-search-button" type="button" aria-label="메모 검색 열기">
+                    <svg viewBox="0 0 24 24" aria-hidden="true">
+                      <path
+                        d="M10.5 3a7.5 7.5 0 0 1 5.91 12.12l3.73 3.73a1 1 0 0 1-1.41 1.41l-3.73-3.73A7.5 7.5 0 1 1 10.5 3Zm0 2a5.5 5.5 0 1 0 0 11a5.5 5.5 0 0 0 0-11Z"
+                      />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div class="filter-grid ledger-filter-grid">
+                <label class="filter-scope-field">
                   <span>범위</span>
                   <select id="filter-scope">
                     <option value="month">선택한 월</option>
                     <option value="all">전체 기간</option>
                   </select>
                 </label>
-                <label>
+                <label class="filter-month-field">
                   <span>월 필터</span>
                   <input id="filter-month" type="month" />
                 </label>
                 <label>
                   <span>유형</span>
-                  <select id="filter-type">
+                  <select id="filter-type" class="ledger-filter-select" aria-label="유형">
                     <option value="all">전체</option>
                     <option value="expense">지출</option>
                     <option value="income">수입</option>
@@ -213,20 +253,20 @@
                 </label>
                 <label>
                   <span>카테고리</span>
-                  <select id="filter-category">
+                  <select id="filter-category" class="ledger-filter-select" aria-label="카테고리">
                     <option value="all">전체</option>
                   </select>
                 </label>
                 <label>
                   <span>사용 수단</span>
-                  <select id="filter-payment-method">
+                  <select id="filter-payment-method" class="ledger-filter-select" aria-label="사용 수단">
                     <option value="all">전체</option>
                     <option value="cash">현금</option>
                     <option value="credit">신용카드</option>
                     <option value="debit">체크카드</option>
                   </select>
                 </label>
-                <label class="search-field">
+                <label class="search-field" id="ledger-search-field" hidden>
                   <span>메모 검색</span>
                   <input id="search-input" type="search" placeholder="예: 점심, 월급" />
                 </label>
@@ -304,7 +344,13 @@
           </div>
         </div>
 
-        <div class="field-row">
+        <!-- [Codex] 내역 화면에서는 전체 기간과 특정 월을 같은 시트에서 고를 수 있도록 범위 전환 토글을 함께 둡니다. -->
+        <div class="month-scope-switch" id="month-scope-switch" hidden>
+          <button class="month-scope-option is-active" id="month-scope-month" type="button">선택 월</button>
+          <button class="month-scope-option" id="month-scope-all" type="button">전체 기간</button>
+        </div>
+
+        <div class="field-row" id="month-picker-fields">
           <label>
             <span>연도</span>
             <select id="month-picker-year"></select>
